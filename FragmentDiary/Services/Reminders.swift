@@ -89,6 +89,7 @@ enum BackgroundRefresh {
     static func run() async {
         schedule()
         let count = FragmentCollector().collect(on: .now).count
+        WidgetPublisher.publish(fragmentCount: count, store: nil)
         await ReminderScheduler.reschedule(todayFragmentCount: count)
     }
 }

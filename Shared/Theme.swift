@@ -7,6 +7,8 @@ extension Color {
     static let ink = Color(light: 0x2A2420, dark: 0xEFE8DF)
     static let inkMuted = Color(light: 0x8A7F75, dark: 0x9A8F86)
     static let hairline = Color(light: 0xE4DBCF, dark: 0x352F2A)
+    /// Same values as the app's AccentColor asset, for targets that don't ship that catalog.
+    static let terracotta = Color(light: 0xC1552C, dark: 0xE27A52)
 
     nonisolated init(light: UInt32, dark: UInt32) {
         self.init(uiColor: UIColor { traits in
@@ -53,10 +55,6 @@ enum DateText {
     static func time(_ date: Date) -> String { timeFormatter.string(from: date) }
     static func month(_ date: Date) -> String { monthFormatter.string(from: date) }
     static func full(_ date: Date) -> String { fullFormatter.string(from: date) }
-
-    static func timelineLabel(for fragment: Fragment) -> String {
-        fragment.kind == .event && fragment.end == nil ? "종일" : time(fragment.start)
-    }
 
     static func relativeDay(_ date: Date) -> String {
         let calendar = Calendar.current

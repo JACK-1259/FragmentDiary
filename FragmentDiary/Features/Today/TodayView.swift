@@ -104,6 +104,7 @@ struct TodayView: View {
         missedDay = findMissedDay()
 
         let count = collected.count
+        WidgetPublisher.publish(fragmentCount: count, store: store)
         Task { await ReminderScheduler.reschedule(todayFragmentCount: count) }
     }
 

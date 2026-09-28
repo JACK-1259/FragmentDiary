@@ -1,5 +1,11 @@
 import SwiftUI
 
+extension DateText {
+    static func timelineLabel(for fragment: Fragment) -> String {
+        fragment.kind == .event && fragment.end == nil ? "종일" : time(fragment.start)
+    }
+}
+
 struct PrimaryButtonStyle: ButtonStyle {
     @Environment(\.isEnabled) private var isEnabled
 

@@ -1,0 +1,38 @@
+import Foundation
+
+/// The only data the widget ever sees: counts and dates, never diary content.
+nonisolated struct WidgetSnapshot: Codable, Sendable {
+    static let appGroup = "group.com.jonghwa.fragmentdiary"
+    private static let key = "widgetSnapshot"
+
+    var countDay: Date
+    var fragmentCount: Int
+    var lastEntryDay: Date?
+    var streak: Int
+
+    static func load() -> WidgetSnapshot? {
+        guard let data = UserDefaults(suiteName: appGroup)?.data(forKey: key) else { return nil }
+        return try? JSONDecoder().decode(WidgetSnapshot.self, from: data)
+    }
+
+    func save() {
+        guard let data = try? JSONEncoder().encode(self) else { return }
+        UserDefaults(suiteName: Self.appGroup)?.set(data, forKey: Self.key)
+    }
+
+    /// Nil once the day rolls over and the app hasn't counted the new day yet.
+    func fragmentCount(on day: Date) -> Int? {
+        Calendar.current.isDate(countDay, inSameDayAs: day) ? fragmentCount : nil
+    }
+
+    func wrote(on day: Date) -> Bool {
+        lastEntryDay.map { Calendar.current.isDate($0, inSameDayAs: day) } ?? false
+    }
+
+    func streak(on day: Date) -> Int {
+        guard let lastEntryDay else { return 0 }
+        let calendar = Calendar.current
+        let gap = calendar.dateComponents([.day], from: calendar.startOfDay(for: lastEntryDay), to: calendar.startOfDay(for: day)).day ?? .max
+        return gap <= 1 ? streak : 0
+    }
+}

@@ -137,6 +137,7 @@ struct SettingsView: View {
         do {
             try store.eraseEverything()
             UserDefaults.standard.removeObject(forKey: ReminderSettings.lastEntryDayKey)
+            WidgetPublisher.publish(fragmentCount: collector.collect(on: .now).count, store: store)
         } catch {
             errorText = error.localizedDescription
         }
