@@ -37,9 +37,18 @@ struct LockScreenView: View {
                 }
                 .buttonStyle(PrimaryButtonStyle())
                 .disabled(isAuthenticating)
+                #if DEBUG
+                Button("잠금 건너뛰기 (디버그 전용)") {
+                    Task { await unlock(skipBiometrics: true) }
+                }
+                .font(.footnote)
+                .foregroundStyle(Color.inkMuted)
+                .padding(.top, 4)
+                #endif
             }
         }
         .padding(24)
+        #if !DEBUG
         .task {
             if scenePhase == .active { await autoUnlock() }
         }
@@ -50,6 +59,7 @@ struct LockScreenView: View {
             default: break
             }
         }
+        #endif
     }
 
     private func autoUnlock() async {
@@ -58,13 +68,13 @@ struct LockScreenView: View {
         await unlock()
     }
 
-    private func unlock() async {
+    private func unlock(skipBiometrics: Bool = false) async {
         guard !isAuthenticating else { return }
         isAuthenticating = true
         defer { isAuthenticating = false }
 
         lock.refreshAvailability()
-        if lock.isEffective {
+        if lock.isEffective && !skipBiometrics {
             guard await lock.authenticate() else { return }
         }
         do {
