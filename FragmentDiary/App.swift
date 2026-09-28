@@ -54,6 +54,9 @@ struct RootView: View {
         .animation(.easeInOut(duration: 0.25), value: store.isUnlocked)
         .animation(.easeInOut(duration: 0.3), value: onboarded)
         .onAppear(perform: applyWindowTint)
+        #if DEBUG
+        .task { await DebugSeeder.removeSampleDataIfRequested() }
+        #endif
         .onChange(of: themeValue) {
             applyWindowTint()
             WidgetCenter.shared.reloadAllTimelines()
