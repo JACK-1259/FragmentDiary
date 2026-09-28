@@ -57,6 +57,7 @@ nonisolated struct FragmentsProvider: TimelineProvider {
 struct FragmentsWidgetView: View {
     let entry: FragmentsEntry
     @Environment(\.widgetFamily) private var family
+    private let accent = AppTheme.current.accent
 
     var body: some View {
         switch family {
@@ -92,7 +93,7 @@ struct FragmentsWidgetView: View {
         VStack(alignment: .leading, spacing: 1) {
             Text(DateText.weekday(entry.date))
                 .font(.caption2.weight(.semibold))
-                .foregroundStyle(Color.terracotta)
+                .foregroundStyle(accent)
             Text(DateText.day(entry.date))
                 .font(.system(.subheadline, design: .serif, weight: .semibold))
                 .foregroundStyle(Color.ink)
@@ -104,7 +105,7 @@ struct FragmentsWidgetView: View {
         if entry.wrote {
             Image(systemName: "checkmark.seal.fill")
                 .font(.system(size: 34))
-                .foregroundStyle(Color.terracotta)
+                .foregroundStyle(accent)
         } else {
             HStack(alignment: .firstTextBaseline, spacing: 3) {
                 Text(countText)
@@ -123,7 +124,7 @@ struct FragmentsWidgetView: View {
             HStack(alignment: .top) {
                 dateHeader
                 Spacer(minLength: 0)
-                MiniStack()
+                MiniStack(accent: accent)
             }
             Spacer(minLength: 4)
             countBlock
@@ -147,13 +148,13 @@ struct FragmentsWidgetView: View {
             }
             Spacer(minLength: 0)
             VStack(alignment: .trailing, spacing: 8) {
-                MiniStack(scale: 1.6)
+                MiniStack(accent: accent, scale: 1.6)
                     .padding(.top, 6)
                 Spacer(minLength: 0)
                 if let streakText {
                     Text(streakText)
                         .font(.caption.weight(.semibold))
-                        .foregroundStyle(Color.terracotta)
+                        .foregroundStyle(accent)
                 }
                 Text("일기 내용은 앱 안에만 있어요")
                     .font(.caption2)
@@ -198,13 +199,14 @@ struct FragmentsWidgetView: View {
 
 /// The app's three-card motif, small enough for a widget corner.
 private struct MiniStack: View {
+    let accent: Color
     var scale: CGFloat = 1
 
     var body: some View {
         ZStack {
             card(Color(rgb: 0x9DB08F)).rotationEffect(.degrees(-10)).offset(x: -6 * scale, y: 2 * scale)
             card(Color(rgb: 0xE2B660)).rotationEffect(.degrees(8)).offset(x: 6 * scale)
-            card(Color.terracotta).rotationEffect(.degrees(-2)).offset(y: -2 * scale)
+            card(accent).rotationEffect(.degrees(-2)).offset(y: -2 * scale)
         }
         .frame(width: 30 * scale, height: 26 * scale)
         .accessibilityHidden(true)

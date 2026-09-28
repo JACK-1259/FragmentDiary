@@ -19,6 +19,14 @@ struct SettingsView: View {
             Form {
                 Group {
                     Section {
+                        ThemePicker()
+                    } header: {
+                        Text("테마 색")
+                    } footer: {
+                        Text("버튼, 강조 표시, 홈 화면 위젯에 같은 색이 적용돼요.")
+                    }
+
+                    Section {
                         Toggle("\(lock.methodName)로 잠그기", isOn: $lock.enabled)
                             .disabled(lock.availability == .unavailable)
                     } header: {
@@ -89,7 +97,6 @@ struct SettingsView: View {
                 }
                 .listRowBackground(Color.card)
             }
-            .tint(Color.accentColor)
             .scrollContentBackground(.hidden)
             .background(Color.paper)
             .navigationTitle("설정")

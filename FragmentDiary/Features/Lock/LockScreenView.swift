@@ -15,7 +15,7 @@ struct LockScreenView: View {
             Spacer()
             Image(systemName: "lock.fill")
                 .font(.system(size: 26, weight: .medium))
-                .foregroundStyle(Color.accentColor)
+                .foregroundStyle(.tint)
             Text("조각일기")
                 .font(.system(.largeTitle, design: .serif, weight: .semibold))
                 .foregroundStyle(Color.ink)

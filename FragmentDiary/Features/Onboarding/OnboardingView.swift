@@ -18,7 +18,7 @@ struct OnboardingView: View {
             HStack(spacing: 6) {
                 ForEach(0..<primaryTitles.count, id: \.self) { index in
                     Capsule()
-                        .fill(index <= step ? Color.accentColor : Color.hairline)
+                        .fill(index <= step ? AnyShapeStyle(.tint) : AnyShapeStyle(Color.hairline))
                         .frame(width: index == step ? 22 : 8, height: 8)
                 }
             }
@@ -106,7 +106,6 @@ struct OnboardingView: View {
                         Toggle("\(lock.methodName)로 잠그기", isOn: Binding(get: { lock.enabled }, set: { lock.enabled = $0 }))
                             .font(.subheadline.weight(.medium))
                             .foregroundStyle(Color.ink)
-                            .tint(Color.accentColor)
                             .padding(.top, 6)
                     }
                 }
@@ -185,9 +184,9 @@ private struct SymbolBadge: View {
     var body: some View {
         Image(systemName: systemName)
             .font(.system(size: 38))
-            .foregroundStyle(Color.accentColor)
+            .foregroundStyle(.tint)
             .frame(width: 92, height: 92)
-            .background(RoundedRectangle(cornerRadius: 26, style: .continuous).fill(Color.accentColor.opacity(0.12)))
+            .background(RoundedRectangle(cornerRadius: 26, style: .continuous).fill(.tint.opacity(0.12)))
             .rotationEffect(.degrees(-4))
             .accessibilityHidden(true)
     }
@@ -202,7 +201,7 @@ private struct PromiseRow: View {
             Text(text).foregroundStyle(Color.ink)
         } icon: {
             Image(systemName: systemName)
-                .foregroundStyle(Color.accentColor)
+                .foregroundStyle(.tint)
                 .frame(width: 26)
         }
         .font(.subheadline)

@@ -100,7 +100,7 @@ struct FolderDetailView: View {
                         .foregroundStyle(Color.inkMuted)
                     Text("초대하기")
                         .font(.subheadline.weight(.semibold))
-                        .foregroundStyle(Color.accentColor)
+                        .foregroundStyle(.tint)
                 }
             }
             .buttonStyle(.plain)
@@ -349,7 +349,6 @@ private struct MembersSheet: View {
                 }
                 .listRowBackground(Color.card)
             }
-            .tint(Color.accentColor)
             .scrollContentBackground(.hidden)
             .background(Color.paper)
             .navigationTitle(folder.name)

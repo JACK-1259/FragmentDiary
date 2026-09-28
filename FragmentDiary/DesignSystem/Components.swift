@@ -6,16 +6,22 @@ extension DateText {
     }
 }
 
+extension EnvironmentValues {
+    /// Text color that stays readable on the user's accent (a pale custom color needs dark text).
+    @Entry var onThemeAccent: Color = AppTheme.default.onAccent
+}
+
 struct PrimaryButtonStyle: ButtonStyle {
     @Environment(\.isEnabled) private var isEnabled
+    @Environment(\.onThemeAccent) private var onAccent
 
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
             .font(.headline)
-            .foregroundStyle(.white)
+            .foregroundStyle(onAccent)
             .frame(maxWidth: .infinity)
             .padding(.vertical, 16)
-            .background(Capsule().fill(Color.accentColor.opacity(isEnabled ? 1 : 0.35)))
+            .background(Capsule().fill(.tint.opacity(isEnabled ? 1 : 0.35)))
             .scaleEffect(configuration.isPressed ? 0.98 : 1)
             .animation(.snappy(duration: 0.15), value: configuration.isPressed)
     }
@@ -68,7 +74,7 @@ struct DayHeader: View {
         VStack(alignment: .leading, spacing: 4) {
             Text(DateText.weekday(day))
                 .font(.subheadline.weight(.semibold))
-                .foregroundStyle(Color.accentColor)
+                .foregroundStyle(.tint)
             Text(DateText.day(day))
                 .font(.system(size: 38, weight: .semibold, design: .serif))
                 .foregroundStyle(Color.ink)
@@ -142,10 +148,10 @@ struct NewBadge: View {
     var body: some View {
         Text("새 조각")
             .font(.caption2.weight(.semibold))
-            .foregroundStyle(Color.accentColor)
+            .foregroundStyle(.tint)
             .padding(.horizontal, 6)
             .padding(.vertical, 2)
-            .background(Capsule().fill(Color.accentColor.opacity(0.14)))
+            .background(Capsule().fill(.tint.opacity(0.14)))
     }
 }
 
@@ -162,7 +168,7 @@ struct TimelineRow<Content: View>: View {
                     .font(.caption.monospacedDigit().weight(.medium))
                     .foregroundStyle(Color.inkMuted)
                 Circle()
-                    .fill(Color.accentColor)
+                    .fill(.tint)
                     .frame(width: 7, height: 7)
             }
             .frame(width: 44)
@@ -324,7 +330,7 @@ struct EventSummary: View {
     var body: some View {
         HStack(alignment: .top, spacing: 10) {
             RoundedRectangle(cornerRadius: 2)
-                .fill(Color.accentColor)
+                .fill(.tint)
                 .frame(width: 3)
             VStack(alignment: .leading, spacing: 4) {
                 HStack(spacing: 6) {
@@ -358,13 +364,13 @@ struct EventSummary: View {
 struct FragmentStackIllustration: View {
     var body: some View {
         ZStack {
-            tile(symbol: "text.quote", color: Mood.calm.color)
+            tile(symbol: "text.quote", style: AnyShapeStyle(Mood.calm.color))
                 .rotationEffect(.degrees(-9))
                 .offset(x: -70, y: 14)
-            tile(symbol: "calendar", color: Mood.good.color)
+            tile(symbol: "calendar", style: AnyShapeStyle(Mood.good.color))
                 .rotationEffect(.degrees(7))
                 .offset(x: 70, y: 4)
-            tile(symbol: "photo", color: .accentColor)
+            tile(symbol: "photo", style: AnyShapeStyle(.tint))
                 .rotationEffect(.degrees(-2))
                 .offset(y: -14)
         }
@@ -373,10 +379,10 @@ struct FragmentStackIllustration: View {
         .accessibilityHidden(true)
     }
 
-    private func tile(symbol: String, color: Color) -> some View {
+    private func tile(symbol: String, style: AnyShapeStyle) -> some View {
         VStack(alignment: .leading, spacing: 8) {
             RoundedRectangle(cornerRadius: 8, style: .continuous)
-                .fill(color.opacity(0.85))
+                .fill(style.opacity(0.85))
                 .frame(height: 96)
                 .overlay {
                     Image(systemName: symbol)

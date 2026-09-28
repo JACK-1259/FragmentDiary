@@ -238,7 +238,6 @@ private struct NewFolderSheet: View {
                 }
                 .listRowBackground(Color.card)
             }
-            .tint(Color.accentColor)
             .scrollContentBackground(.hidden)
             .background(Color.paper)
             .navigationTitle("새 폴더")

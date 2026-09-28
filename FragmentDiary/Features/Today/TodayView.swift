@@ -161,9 +161,9 @@ private struct CompletedTodayView<Accessory: View>: View {
                             Text("더하기").fontWeight(.semibold)
                         }
                         .font(.subheadline)
-                        .foregroundStyle(Color.accentColor)
+                        .foregroundStyle(.tint)
                         .padding(14)
-                        .background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(Color.accentColor.opacity(0.12)))
+                        .background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(.tint.opacity(0.12)))
                     }
                     .buttonStyle(.plain)
                 }

@@ -85,7 +85,6 @@ struct BackfillPickerView: View {
                     VStack(alignment: .leading, spacing: 20) {
                         DatePicker("날짜", selection: $day, in: ...latestSelectableDay, displayedComponents: .date)
                             .datePickerStyle(.graphical)
-                            .tint(Color.accentColor)
                             .environment(\.locale, Locale(identifier: "ko_KR"))
                             .padding(8)
                             .cardStyle()
@@ -120,7 +119,7 @@ struct BackfillPickerView: View {
         HStack(spacing: 12) {
             Image(systemName: alreadyWritten ? "checkmark.seal" : "square.stack")
                 .font(.title3)
-                .foregroundStyle(Color.accentColor)
+                .foregroundStyle(.tint)
                 .frame(width: 28)
             VStack(alignment: .leading, spacing: 2) {
                 Text(DateText.full(day))
@@ -155,7 +154,7 @@ struct MissedDayBanner: View {
                 HStack(spacing: 12) {
                     Image(systemName: "clock.arrow.circlepath")
                         .font(.title3)
-                        .foregroundStyle(Color.accentColor)
+                        .foregroundStyle(.tint)
                     VStack(alignment: .leading, spacing: 2) {
                         Text("\(DateText.relativeDay(day))의 조각 \(count)개가 남아 있어요")
                             .font(.subheadline.weight(.semibold))
@@ -167,7 +166,7 @@ struct MissedDayBanner: View {
                     Spacer(minLength: 0)
                     Text("채우기")
                         .font(.subheadline.weight(.semibold))
-                        .foregroundStyle(Color.accentColor)
+                        .foregroundStyle(.tint)
                 }
                 .contentShape(Rectangle())
             }
@@ -183,6 +182,6 @@ struct MissedDayBanner: View {
             .accessibilityLabel("알림 닫기")
         }
         .padding(14)
-        .background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(Color.accentColor.opacity(0.1)))
+        .background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(.tint.opacity(0.1)))
     }
 }

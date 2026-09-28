@@ -109,7 +109,6 @@ struct ComposerView<Accessory: View>: View {
                             .font(.subheadline.weight(.medium))
                             .foregroundStyle(Color.ink)
                     }
-                    .tint(Color.accentColor)
                     if draft.showCover {
                         PhotoCollage(assetIDs: cover.fragment.assetIDs, height: 170)
                     }
@@ -219,7 +218,7 @@ private struct FragmentCard: View {
             } label: {
                 Image(systemName: item.included ? "checkmark.circle.fill" : "circle")
                     .font(.title3)
-                    .foregroundStyle(item.included ? Color.accentColor : Color.inkMuted)
+                    .foregroundStyle(item.included ? AnyShapeStyle(.tint) : AnyShapeStyle(Color.inkMuted))
                     .frame(width: 28, height: 28)
             }
             .buttonStyle(.plain)
