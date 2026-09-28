@@ -58,6 +58,7 @@ enum DateText {
 
     static func relativeDay(_ date: Date) -> String {
         let calendar = Calendar.current
+        if calendar.isDateInToday(date) { return "오늘" }
         if calendar.isDateInYesterday(date) { return "어제" }
         let days = calendar.dateComponents([.day], from: calendar.startOfDay(for: date), to: calendar.startOfDay(for: .now)).day
         if days == 2 { return "그저께" }

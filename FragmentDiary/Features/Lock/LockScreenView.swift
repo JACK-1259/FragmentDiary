@@ -2,6 +2,7 @@ import SwiftUI
 
 struct LockScreenView: View {
     @Environment(JournalStore.self) private var store
+    @Environment(FolderStore.self) private var folderStore
     @Environment(AppLock.self) private var lock
     @Environment(\.scenePhase) private var scenePhase
     // One automatic prompt per return to the foreground; the Face ID sheet itself flips scenePhase, so retrying on every .active would loop after a cancel.
@@ -67,7 +68,10 @@ struct LockScreenView: View {
             guard await lock.authenticate() else { return }
         }
         do {
-            try store.unlock(key: KeyVault.loadOrCreateKey())
+            let key = try KeyVault.loadOrCreateKey()
+            // Folders first: RootView reveals the app as soon as the journal reports unlocked.
+            try folderStore.unlock(key: key)
+            try store.unlock(key: key)
             errorText = nil
         } catch {
             errorText = "기록을 여는 중 문제가 생겼어요.\n\(error.localizedDescription)"

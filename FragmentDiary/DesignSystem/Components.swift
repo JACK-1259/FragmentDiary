@@ -214,12 +214,54 @@ struct AssetThumbnail: View {
     }
 }
 
+enum PhotoRef: Hashable {
+    case asset(String)
+    case attachment(UUID)
+
+    var seed: String {
+        switch self {
+        case .asset(let id): id
+        case .attachment(let id): id.uuidString
+        }
+    }
+}
+
+struct PhotoRefThumbnail: View {
+    let photo: PhotoRef
+
+    var body: some View {
+        switch photo {
+        case .asset(let id): AssetThumbnail(assetID: id)
+        case .attachment(let id): AttachmentThumbnail(attachmentID: id)
+        }
+    }
+}
+
+struct AttachmentThumbnail: View {
+    let attachmentID: UUID
+    @Environment(FolderStore.self) private var folderStore
+
+    var body: some View {
+        Rectangle()
+            .fill(Color.hairline)
+            .overlay {
+                if let image = folderStore.thumbnail(for: attachmentID) {
+                    Image(uiImage: image)
+                        .resizable()
+                        .scaledToFill()
+                }
+            }
+            .clipped()
+            .accessibilityHidden(true)
+    }
+}
+
 struct PolaroidTile: View {
-    let assetID: String
+    let photo: PhotoRef
     let size: CGSize
 
     var body: some View {
-        AssetThumbnail(assetID: assetID)
+        PhotoRefThumbnail(photo: photo)
             .frame(width: size.width - 8, height: size.height - 8)
             .clipShape(RoundedRectangle(cornerRadius: 4, style: .continuous))
             .padding(4)
@@ -230,25 +272,34 @@ struct PolaroidTile: View {
 
 /// Overlapping, slightly tilted prints — the scrapbook look, kept restrained.
 struct PhotoCollage: View {
-    let assetIDs: [String]
+    let photos: [PhotoRef]
     var height: CGFloat = 150
 
+    init(photos: [PhotoRef], height: CGFloat = 150) {
+        self.photos = photos
+        self.height = height
+    }
+
+    init(assetIDs: [String], height: CGFloat = 150) {
+        self.init(photos: assetIDs.map(PhotoRef.asset), height: height)
+    }
+
     var body: some View {
-        let shown = Array(assetIDs.prefix(3))
+        let shown = Array(photos.prefix(3))
         let tileHeight = height - 16
         let tileWidth = shown.count == 1 ? tileHeight * 1.3 : tileHeight * 0.78
         let step = tileWidth * 0.62
         let totalWidth = CGFloat(max(shown.count - 1, 0)) * step + tileWidth
 
         ZStack(alignment: .topLeading) {
-            ForEach(Array(shown.enumerated()), id: \.element) { index, id in
-                PolaroidTile(assetID: id, size: CGSize(width: tileWidth, height: tileHeight))
-                    .rotationEffect(.degrees(stableAngle(for: id, maxDegrees: 3)))
+            ForEach(Array(shown.enumerated()), id: \.element) { index, photo in
+                PolaroidTile(photo: photo, size: CGSize(width: tileWidth, height: tileHeight))
+                    .rotationEffect(.degrees(stableAngle(for: photo.seed, maxDegrees: 3)))
                     .offset(x: CGFloat(index) * step)
                     .zIndex(Double(index))
             }
-            if assetIDs.count > shown.count {
-                Text("+\(assetIDs.count - shown.count)")
+            if photos.count > shown.count {
+                Text("+\(photos.count - shown.count)")
                     .font(.caption.weight(.semibold))
                     .foregroundStyle(Color.paper)
                     .padding(.horizontal, 8)
@@ -262,7 +313,7 @@ struct PhotoCollage: View {
         .padding(.vertical, 8)
         .padding(.leading, 4)
         .accessibilityElement()
-        .accessibilityLabel("사진 \(assetIDs.count)장")
+        .accessibilityLabel("사진 \(photos.count)장")
     }
 }
 

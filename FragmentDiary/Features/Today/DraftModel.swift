@@ -24,10 +24,13 @@ final class DraftModel: Identifiable {
     var items: [Item]
     var showCover: Bool
     private let existing: DiaryEntry?
+    private let preselectCollected: Bool
 
-    init(day: Date, existing: DiaryEntry?, collected: [Fragment]) {
+    /// `preselectCollected: false` makes every collected fragment opt-in, for drafts that will be shared with others.
+    init(day: Date, existing: DiaryEntry?, collected: [Fragment], preselectCollected: Bool = true) {
         self.day = Calendar.current.startOfDay(for: day)
         self.existing = existing
+        self.preselectCollected = preselectCollected
         mode = existing?.quick == true ? .oneLine : .fragments
         mood = existing?.mood
         note = existing?.note ?? ""
@@ -45,7 +48,7 @@ final class DraftModel: Identifiable {
                 refreshed.caption = items[index].fragment.caption
                 items[index].fragment = refreshed
             } else {
-                items.append(Item(fragment: fragment, included: existing == nil, isNew: existing != nil))
+                items.append(Item(fragment: fragment, included: existing == nil && preselectCollected, isNew: existing != nil))
             }
         }
         items.sort { $0.fragment.start < $1.fragment.start }

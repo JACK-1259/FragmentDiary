@@ -7,14 +7,8 @@ import Observation
 final class JournalStore {
     enum StoreError: LocalizedError {
         case locked
-        case sealFailed
 
-        var errorDescription: String? {
-            switch self {
-            case .locked: "일기가 잠겨 있어요."
-            case .sealFailed: "기록을 암호화하지 못했어요."
-            }
-        }
+        var errorDescription: String? { "일기가 잠겨 있어요." }
     }
 
     private(set) var entries: [DiaryEntry] = []
@@ -24,13 +18,7 @@ final class JournalStore {
     @ObservationIgnored private let fileURL = URL.applicationSupportDirectory.appending(path: "journal.sealed")
 
     func unlock(key: SymmetricKey) throws {
-        if FileManager.default.fileExists(atPath: fileURL.path(percentEncoded: false)) {
-            let box = try AES.GCM.SealedBox(combined: Data(contentsOf: fileURL))
-            let data = try AES.GCM.open(box, using: key)
-            entries = try JSONDecoder().decode([DiaryEntry].self, from: data).sorted { $0.day > $1.day }
-        } else {
-            entries = []
-        }
+        entries = (try SealedFile.read([DiaryEntry].self, from: fileURL, key: key) ?? []).sorted { $0.day > $1.day }
         self.key = key
         isUnlocked = true
     }
@@ -95,9 +83,6 @@ final class JournalStore {
 
     private func persist(_ entries: [DiaryEntry]) throws {
         guard let key else { throw StoreError.locked }
-        let data = try JSONEncoder().encode(entries)
-        guard let sealed = try AES.GCM.seal(data, using: key).combined else { throw StoreError.sealFailed }
-        try FileManager.default.createDirectory(at: fileURL.deletingLastPathComponent(), withIntermediateDirectories: true)
-        try sealed.write(to: fileURL, options: [.atomic, .completeFileProtection])
+        try SealedFile.write(entries, to: fileURL, key: key)
     }
 }

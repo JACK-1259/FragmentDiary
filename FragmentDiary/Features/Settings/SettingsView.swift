@@ -2,12 +2,13 @@ import SwiftUI
 
 struct SettingsView: View {
     @Environment(JournalStore.self) private var store
+    @Environment(FolderStore.self) private var folderStore
     @Environment(AppLock.self) private var lock
     @Environment(FragmentCollector.self) private var collector
     @Environment(\.openURL) private var openURL
     @AppStorage(ReminderSettings.enabledKey) private var reminderEnabled = false
-    @AppStorage(ReminderSettings.minutesKey) private var reminderMinutes = ReminderSettings
-        .defaultMinutes
+    @AppStorage(ReminderSettings.minutesKey) private var reminderMinutes = ReminderSettings.defaultMinutes
+    @AppStorage(LocalIdentity.nameKey) private var displayName = ""
     @State private var confirmErase = false
     @State private var notificationsDenied = false
     @State private var errorText: String?
@@ -53,6 +54,14 @@ struct SettingsView: View {
                         Text("알림")
                     } footer: {
                         Text("그날 모인 조각 수에 맞춰 알려드려요. 이미 기록한 날엔 울리지 않아요.")
+                    }
+
+                    Section {
+                        TextField("폴더에서 보일 내 이름", text: $displayName)
+                    } header: {
+                        Text("함께 쓰는 폴더")
+                    } footer: {
+                        Text("이미 만든 폴더의 이름 표시는 바뀌지 않아요. 동기화 연결 전까지 폴더 기록은 이 기기에만 저장돼요.")
                     }
 
                     Section {
@@ -103,7 +112,7 @@ struct SettingsView: View {
             .confirmationDialog("모든 기록을 삭제할까요?", isPresented: $confirmErase, titleVisibility: .visible) {
                 Button("모두 삭제", role: .destructive) { eraseAll() }
             } message: {
-                Text("암호화 키까지 함께 파기돼서 되돌릴 수 없어요.")
+                Text("개인 일기와 함께 쓰는 폴더의 기록이 모두 지워지고, 암호화 키까지 파기돼서 되돌릴 수 없어요.")
             }
             .alert("알림이 꺼져 있어요", isPresented: $notificationsDenied) {
                 Button("설정 열기") { openSystemSettings() }
@@ -135,7 +144,9 @@ struct SettingsView: View {
 
     private func eraseAll() {
         do {
+            try folderStore.eraseEverything()
             try store.eraseEverything()
+            try folderStore.unlock(key: KeyVault.loadOrCreateKey())
             UserDefaults.standard.removeObject(forKey: ReminderSettings.lastEntryDayKey)
             WidgetPublisher.publish(fragmentCount: collector.collect(on: .now).count, store: store)
         } catch {

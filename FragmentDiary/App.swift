@@ -3,6 +3,7 @@ import SwiftUI
 @main
 struct FragmentDiaryApp: App {
     @State private var store = JournalStore()
+    @State private var folderStore = FolderStore()
     @State private var lock = AppLock()
     @State private var collector = FragmentCollector()
 
@@ -10,6 +11,7 @@ struct FragmentDiaryApp: App {
         WindowGroup {
             RootView()
                 .environment(store)
+                .environment(folderStore)
                 .environment(lock)
                 .environment(collector)
         }
@@ -21,6 +23,7 @@ struct FragmentDiaryApp: App {
 
 struct RootView: View {
     @Environment(JournalStore.self) private var store
+    @Environment(FolderStore.self) private var folderStore
     @Environment(AppLock.self) private var lock
     @Environment(\.scenePhase) private var scenePhase
     @AppStorage("onboarded") private var onboarded = false
@@ -48,6 +51,7 @@ struct RootView: View {
             guard phase == .background else { return }
             if lock.isEffective {
                 store.lock()
+                folderStore.lock()
             }
             BackgroundRefresh.schedule()
         }
@@ -56,7 +60,7 @@ struct RootView: View {
 
 struct MainTabView: View {
     private enum MainTab {
-        case today, history, settings
+        case today, history, together, settings
     }
 
     @State private var selection = MainTab.today
@@ -69,6 +73,9 @@ struct MainTabView: View {
             HistoryView()
                 .tabItem { Label("기록", systemImage: "book.closed") }
                 .tag(MainTab.history)
+            FoldersView()
+                .tabItem { Label("함께", systemImage: "person.2") }
+                .tag(MainTab.together)
             SettingsView()
                 .tabItem { Label("설정", systemImage: "gearshape") }
                 .tag(MainTab.settings)
