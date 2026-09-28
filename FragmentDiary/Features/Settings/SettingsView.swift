@@ -94,6 +94,12 @@ struct SettingsView: View {
                     }
                     .font(.subheadline)
                     .foregroundStyle(Color.ink)
+
+                    #if DEBUG
+                    Section("디버그") {
+                        NavigationLink("위젯 미리보기") { WidgetPreviewView() }
+                    }
+                    #endif
                 }
                 .listRowBackground(Color.card)
             }
