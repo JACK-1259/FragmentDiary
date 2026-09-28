@@ -68,6 +68,8 @@ nonisolated struct DiaryEntry: Codable, Hashable, Identifiable, Sendable {
 
     var photoIDs: [String] { fragments.flatMap(\.assetIDs) }
 
+    var isBackfilled: Bool { !Calendar.current.isDate(createdAt, inSameDayAs: day) }
+
     var previewText: String {
         if !note.isEmpty { return note }
         if let caption = fragments.map(\.caption).first(where: { !$0.isEmpty }) { return caption }

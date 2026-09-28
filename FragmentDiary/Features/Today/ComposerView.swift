@@ -2,11 +2,12 @@ import Photos
 import PhotosUI
 import SwiftUI
 
-struct ComposerView: View {
+struct ComposerView<Accessory: View>: View {
     @Bindable var draft: DraftModel
     let saveTitle: String
     let onSave: (DiaryEntry) -> Void
     var onCancel: (() -> Void)?
+    @ViewBuilder var accessory: Accessory
 
     @Environment(FragmentCollector.self) private var collector
     @State private var pickedPhotos: [PhotosPickerItem] = []
@@ -16,12 +17,13 @@ struct ComposerView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 28) {
                 DayHeader(day: draft.day, subtitle: subtitle)
+                accessory
                 Picker("기록 방식", selection: $draft.mode.animation(.snappy)) {
                     Text("조각으로").tag(DraftModel.Mode.fragments)
                     Text("한 줄로").tag(DraftModel.Mode.oneLine)
                 }
                 .pickerStyle(.segmented)
-                MoodPicker(selection: $draft.mood)
+                MoodPicker(selection: $draft.mood, day: draft.day)
                 switch draft.mode {
                 case .fragments: fragmentsSection
                 case .oneLine: oneLineSection
@@ -40,19 +42,22 @@ struct ComposerView: View {
 
     private var subtitle: String {
         let count = draft.items.count
-        guard Calendar.current.isDateInToday(draft.day) else { return "조각 \(count)개" }
-        return count > 0 ? "오늘의 조각 \(count)개가 모였어요" : "아직 모인 조각이 없어요"
+        if Calendar.current.isDateInToday(draft.day) {
+            return count > 0 ? "오늘의 조각 \(count)개가 모였어요" : "아직 모인 조각이 없어요"
+        }
+        if draft.isEditingExisting { return "조각 \(count)개" }
+        return count > 0 ? "이 날의 조각 \(count)개가 남아 있어요" : "남아 있는 조각이 없어요"
     }
 
     private var fragmentsSection: some View {
         VStack(alignment: .leading, spacing: 0) {
             if draft.items.isEmpty {
-                EmptyFragmentsCard { draft.mode = .oneLine }
+                EmptyFragmentsCard(isToday: Calendar.current.isDateInToday(draft.day)) { draft.mode = .oneLine }
                     .padding(.bottom, 20)
             }
             ForEach($draft.items) { $item in
                 let index = draft.items.firstIndex { $0.id == item.id } ?? 0
-                TimelineRow(time: item.fragment.start) {
+                TimelineRow(label: DateText.timelineLabel(for: item.fragment)) {
                     FragmentCard(item: $item, onRemove: item.isRemovable ? { remove(item.id) } : nil)
                 }
                 .opacity(appeared ? 1 : 0)
@@ -224,6 +229,7 @@ private struct FragmentCard: View {
 }
 
 private struct EmptyFragmentsCard: View {
+    let isToday: Bool
     let onOneLine: () -> Void
 
     @Environment(FragmentCollector.self) private var collector
@@ -233,14 +239,24 @@ private struct EmptyFragmentsCard: View {
         !collector.canReadPhotos || collector.calendarState != .granted
     }
 
+    private var title: String {
+        if needsPermission { return "하루의 조각을 자동으로 모으려면" }
+        return isToday ? "아직 오늘의 조각이 없어요" : "이 날 남은 조각이 없어요"
+    }
+
+    private var message: String {
+        if needsPermission { return "사진과 캘린더를 허용하면 그날 찍은 사진과 지나간 일정이 여기에 알아서 모여요." }
+        return isToday
+            ? "사진을 찍거나 일정이 지나가면 여기에 쌓여요. 지금은 메모 조각을 더하거나 한 줄로 남겨보세요."
+            : "기억나는 걸 메모 조각으로 더하거나, 무드와 한 줄만 남겨도 충분해요."
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
-            Text(needsPermission ? "하루의 조각을 자동으로 모으려면" : "아직 오늘의 조각이 없어요")
+            Text(title)
                 .font(.headline)
                 .foregroundStyle(Color.ink)
-            Text(needsPermission
-                 ? "사진과 캘린더를 허용하면 오늘 찍은 사진과 지나간 일정이 여기에 알아서 모여요."
-                 : "사진을 찍거나 일정이 지나가면 여기에 쌓여요. 지금은 메모 조각을 더하거나 한 줄로 남겨보세요.")
+            Text(message)
                 .font(.subheadline)
                 .foregroundStyle(Color.inkMuted)
                 .fixedSize(horizontal: false, vertical: true)
@@ -263,5 +279,11 @@ private struct EmptyFragmentsCard: View {
         .padding(18)
         .frame(maxWidth: .infinity, alignment: .leading)
         .cardStyle()
+    }
+}
+
+extension ComposerView where Accessory == EmptyView {
+    init(draft: DraftModel, saveTitle: String, onSave: @escaping (DiaryEntry) -> Void, onCancel: (() -> Void)? = nil) {
+        self.init(draft: draft, saveTitle: saveTitle, onSave: onSave, onCancel: onCancel, accessory: { EmptyView() })
     }
 }

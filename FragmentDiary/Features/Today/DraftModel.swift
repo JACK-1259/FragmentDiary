@@ -68,6 +68,8 @@ final class DraftModel: Identifiable {
         items.removeAll { $0.id == id }
     }
 
+    var isEditingExisting: Bool { existing != nil }
+
     var coverItem: Item? {
         items.filter { $0.fragment.kind == .photos }.max { $0.fragment.assetIDs.count < $1.fragment.assetIDs.count }
     }

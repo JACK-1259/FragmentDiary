@@ -6,7 +6,7 @@ struct EntryContentView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 20) {
             if let mood = entry.mood {
-                MoodChip(mood: mood)
+                MoodChip(mood: mood, day: entry.day)
             }
             if entry.quick, !entry.note.isEmpty {
                 Text(entry.note)
@@ -17,7 +17,7 @@ struct EntryContentView: View {
             if !entry.fragments.isEmpty {
                 VStack(spacing: 0) {
                     ForEach(entry.fragments) { fragment in
-                        TimelineRow(time: fragment.start, showsLine: fragment.id != entry.fragments.last?.id) {
+                        TimelineRow(label: DateText.timelineLabel(for: fragment), showsLine: fragment.id != entry.fragments.last?.id) {
                             FragmentReadView(fragment: fragment)
                         }
                     }

@@ -9,12 +9,19 @@ struct TodayView: View {
     @State private var isEditing = false
     @State private var saveError: String?
     @State private var savedTick = 0
+    @State private var missedDay: (day: Date, count: Int)?
+    @State private var backfillTarget: BackfillTarget?
+    @AppStorage("backfillDismissedThrough") private var backfillDismissedThrough: Double = 0
+
+    private static let backfillLookbackDays = 7
 
     var body: some View {
         Group {
             if let entry = store.entry(on: .now), !isEditing {
                 CompletedTodayView(entry: entry, newCount: newFragmentCount(for: entry)) {
                     startEditing(entry)
+                } accessory: {
+                    missedDayBanner
                 }
             } else if let draft {
                 ComposerView(
@@ -22,7 +29,9 @@ struct TodayView: View {
                     saveTitle: isEditing ? "수정 완료" : "오늘 기록 완성",
                     onSave: save,
                     onCancel: isEditing ? { cancelEditing() } : nil
-                )
+                ) {
+                    if !isEditing { missedDayBanner }
+                }
             } else {
                 Color.paper.ignoresSafeArea()
             }
@@ -35,6 +44,9 @@ struct TodayView: View {
         .onChange(of: store.entries) { refresh() }
         .onChange(of: collector.photoStatus) { refresh() }
         .onChange(of: collector.calendarStatus) { refresh() }
+        .sheet(item: $backfillTarget) { target in
+            BackfillComposer(day: target.day) { backfillTarget = nil }
+        }
         .alert(
             "저장하지 못했어요",
             isPresented: Binding(get: { saveError != nil }, set: { if !$0 { saveError = nil } })
@@ -43,6 +55,33 @@ struct TodayView: View {
         } message: {
             Text(saveError ?? "")
         }
+    }
+
+    @ViewBuilder
+    private var missedDayBanner: some View {
+        if let missedDay {
+            MissedDayBanner(day: missedDay.day, count: missedDay.count) {
+                backfillTarget = BackfillTarget(day: missedDay.day)
+            } onDismiss: {
+                backfillDismissedThrough = missedDay.day.timeIntervalSince1970
+                withAnimation(.snappy) { self.missedDay = nil }
+            }
+            .transition(.opacity.combined(with: .move(edge: .top)))
+        }
+    }
+
+    /// Most recent unwritten day in the past week that still has fragments to offer.
+    private func findMissedDay() -> (day: Date, count: Int)? {
+        let calendar = Calendar.current
+        let today = calendar.startOfDay(for: .now)
+        for offset in 1...Self.backfillLookbackDays {
+            guard let day = calendar.date(byAdding: .day, value: -offset, to: today) else { continue }
+            if day.timeIntervalSince1970 <= backfillDismissedThrough { break }
+            if store.entry(on: day) != nil { continue }
+            let count = collector.collect(on: day).count
+            if count > 0 { return (day, count) }
+        }
+        return nil
     }
 
     private func refresh() {
@@ -62,6 +101,7 @@ struct TodayView: View {
         if draft == nil && entry == nil {
             draft = DraftModel(day: .now, existing: nil, collected: collected)
         }
+        missedDay = findMissedDay()
 
         let count = collected.count
         Task { await ReminderScheduler.reschedule(todayFragmentCount: count) }
@@ -100,15 +140,17 @@ struct TodayView: View {
     }
 }
 
-private struct CompletedTodayView: View {
+private struct CompletedTodayView<Accessory: View>: View {
     let entry: DiaryEntry
     let newCount: Int
     let onEdit: () -> Void
+    @ViewBuilder var accessory: Accessory
 
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 24) {
                 DayHeader(day: entry.day, subtitle: "오늘의 기록이 완성됐어요")
+                accessory
                 if newCount > 0 {
                     Button(action: onEdit) {
                         HStack(spacing: 8) {

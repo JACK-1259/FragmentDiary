@@ -78,10 +78,11 @@ struct DayHeader: View {
 
 struct MoodPicker: View {
     @Binding var selection: Mood?
+    var day: Date = .now
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("오늘의 결")
+            Text(Calendar.current.isDateInToday(day) ? "오늘의 결" : "그날의 결")
                 .font(.footnote.weight(.medium))
                 .foregroundStyle(Color.inkMuted)
             HStack(spacing: 0) {
@@ -116,11 +117,12 @@ struct MoodPicker: View {
 
 struct MoodChip: View {
     let mood: Mood
+    let day: Date
 
     var body: some View {
         HStack(spacing: 8) {
             Circle().fill(mood.color).frame(width: 10, height: 10)
-            Text("오늘의 결 · \(mood.label)")
+            Text("\(Calendar.current.isDateInToday(day) ? "오늘의 결" : "그날의 결") · \(mood.label)")
         }
         .font(.subheadline.weight(.medium))
         .foregroundStyle(Color.ink)
@@ -143,14 +145,14 @@ struct NewBadge: View {
 
 /// Time on the left, a dot, and a hairline running down to the next moment.
 struct TimelineRow<Content: View>: View {
-    let time: Date
+    let label: String
     var showsLine = true
     @ViewBuilder var content: Content
 
     var body: some View {
         HStack(alignment: .top, spacing: 12) {
             VStack(spacing: 6) {
-                Text(DateText.time(time))
+                Text(label)
                     .font(.caption.monospacedDigit().weight(.medium))
                     .foregroundStyle(Color.inkMuted)
                 Circle()

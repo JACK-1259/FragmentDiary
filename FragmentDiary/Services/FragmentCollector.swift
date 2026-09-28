@@ -101,8 +101,8 @@ final class FragmentCollector {
         let bounds = dayBounds(day)
         let predicate = eventStore.predicateForEvents(withStart: bounds.start, end: bounds.end, calendars: nil)
         return eventStore.events(matching: predicate)
-            // Upcoming events are plans, not memories.
-            .filter { $0.startDate <= now && $0.calendar.type != .birthday }
+            // Upcoming events are plans, not memories; holiday and other subscribed calendars aren't personal.
+            .filter { $0.startDate <= now && $0.calendar.type != .birthday && $0.calendar.type != .subscription }
             .map { event in
                 Fragment(
                     sourceID: "event:\(event.calendarItemIdentifier)@\(Int(event.startDate.timeIntervalSince1970))",

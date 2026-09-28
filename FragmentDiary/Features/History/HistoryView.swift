@@ -2,6 +2,7 @@ import SwiftUI
 
 struct HistoryView: View {
     @Environment(JournalStore.self) private var store
+    @State private var showBackfill = false
 
     private var months: [(month: Date, entries: [DiaryEntry])] {
         let calendar = Calendar.current
@@ -43,6 +44,18 @@ struct HistoryView: View {
             .navigationDestination(for: UUID.self) { id in
                 EntryDetailView(entryID: id)
             }
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button {
+                        showBackfill = true
+                    } label: {
+                        Label("놓친 날 채우기", systemImage: "calendar.badge.plus")
+                    }
+                }
+            }
+            .sheet(isPresented: $showBackfill) {
+                BackfillPickerView { showBackfill = false }
+            }
         }
     }
 
@@ -64,7 +77,8 @@ struct HistoryView: View {
             Text("아직 기록이 없어요")
                 .font(.system(.title3, design: .serif, weight: .semibold))
                 .foregroundStyle(Color.ink)
-            Text("오늘 탭에서 첫 조각을 모아보세요.")
+            Text("오늘 탭에서 첫 조각을 모으거나,\n오른쪽 위 버튼으로 지난 날을 채워보세요.")
+                .multilineTextAlignment(.center)
                 .font(.subheadline)
                 .foregroundStyle(Color.inkMuted)
         }
@@ -142,6 +156,9 @@ private struct DayCard: View {
             }
             if entry.quick {
                 Text("한 줄")
+            }
+            if entry.isBackfilled {
+                Text("나중에 채움")
             }
         }
         .font(.caption)

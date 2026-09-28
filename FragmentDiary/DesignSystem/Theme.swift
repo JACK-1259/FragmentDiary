@@ -53,6 +53,18 @@ enum DateText {
     static func time(_ date: Date) -> String { timeFormatter.string(from: date) }
     static func month(_ date: Date) -> String { monthFormatter.string(from: date) }
     static func full(_ date: Date) -> String { fullFormatter.string(from: date) }
+
+    static func timelineLabel(for fragment: Fragment) -> String {
+        fragment.kind == .event && fragment.end == nil ? "종일" : time(fragment.start)
+    }
+
+    static func relativeDay(_ date: Date) -> String {
+        let calendar = Calendar.current
+        if calendar.isDateInYesterday(date) { return "어제" }
+        let days = calendar.dateComponents([.day], from: calendar.startOfDay(for: date), to: calendar.startOfDay(for: .now)).day
+        if days == 2 { return "그저께" }
+        return "\(day(date)) \(weekday(date))"
+    }
 }
 
 nonisolated extension String {
