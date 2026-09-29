@@ -22,8 +22,7 @@ struct TodayFragmentsWidget: Widget {
 
 nonisolated struct FragmentsProvider: TimelineProvider {
     func placeholder(in context: Context) -> FragmentsEntry {
-        FragmentsEntry(date: .now, fragmentCount: 5, wrote: false, streak: 3,
-                       week: [.written, .written, .missed, .written, .today, .future, .future])
+        FragmentsEntry(date: .now, fragmentCount: 5, wrote: false, streak: 3)
     }
 
     func getSnapshot(in context: Context, completion: @escaping (FragmentsEntry) -> Void) {
@@ -43,8 +42,7 @@ nonisolated struct FragmentsProvider: TimelineProvider {
             date: date,
             fragmentCount: snapshot?.fragmentCount(on: date),
             wrote: snapshot?.wrote(on: date) ?? false,
-            streak: snapshot?.streak(on: date) ?? 0,
-            week: WidgetSnapshot.week(containing: date, writtenDays: snapshot?.writtenDays ?? [])
+            streak: snapshot?.streak(on: date) ?? 0
         )
     }
 }
