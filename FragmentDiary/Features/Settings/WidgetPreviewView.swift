@@ -7,9 +7,14 @@ import WidgetKit
 /// system's on-device vibrancy pass for accessory families, but layout and overflow are real.
 struct WidgetPreviewView: View {
     private let sampleEntries: [(title: String, entry: FragmentsEntry)] = [
-        ("조각 5개, 미기록", FragmentsEntry(date: .now, fragmentCount: 5, wrote: false, streak: 0)),
-        ("기록 완료, 3일째", FragmentsEntry(date: .now, fragmentCount: 5, wrote: true, streak: 3)),
-        ("조각 0개", FragmentsEntry(date: .now, fragmentCount: 0, wrote: false, streak: 0)),
+        ("조각 5개, 미기록 (금요일, 수요일 놓침)", FragmentsEntry(date: .now, fragmentCount: 5, wrote: false, streak: 0,
+                                                     week: [.written, .written, .missed, .written, .today, .future, .future])),
+        ("기록 완료, 3일째", FragmentsEntry(date: .now, fragmentCount: 5, wrote: true, streak: 3,
+                                       week: [.written, .written, .written, .written, .written, .future, .future])),
+        ("조각 0개, 월요일", FragmentsEntry(date: .now, fragmentCount: 0, wrote: false, streak: 0,
+                                       week: [.today, .future, .future, .future, .future, .future, .future])),
+        ("한 주 완성", FragmentsEntry(date: .now, fragmentCount: 2, wrote: true, streak: 7,
+                                 week: Array(repeating: .written, count: 7))),
     ]
 
     var body: some View {
