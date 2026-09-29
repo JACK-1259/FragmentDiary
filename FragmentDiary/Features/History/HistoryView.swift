@@ -71,9 +71,8 @@ struct HistoryView: View {
 
     private var emptyState: some View {
         VStack(spacing: 16) {
-            FragmentStackIllustration()
-                .scaleEffect(0.7)
-                .frame(height: 170)
+            MiniNotebook(scale: 4.2)
+                .padding(.bottom, 8)
             Text("아직 기록이 없어요")
                 .font(.system(.title3, design: .serif, weight: .semibold))
                 .foregroundStyle(Color.ink)

@@ -176,6 +176,7 @@ struct MiniNotebook: View {
     private static let rings = Color(light: 0x6B5E7A, dark: 0xB8AECB)
     private static let ribbon = Color(light: 0xE85D6F, dark: 0xE0677A)
     private static let title = Color(light: 0xC9B8A8, dark: 0x8E8070)
+    private static let subtitle = Color(light: 0xDDD0C3, dark: 0xB2A594)
 
     var body: some View {
         let width = 28 * scale
@@ -223,6 +224,8 @@ struct MiniNotebook: View {
 
         context.fill(Path(roundedRect: CGRect(x: cover.midX - 80, y: cover.midY - 30, width: 160, height: 20), cornerRadius: 10),
                      with: .color(Self.title))
+        context.fill(Path(roundedRect: CGRect(x: cover.midX - 55, y: cover.midY + 12, width: 110, height: 16), cornerRadius: 8),
+                     with: .color(Self.subtitle))
         for i in 0..<6 {
             let y = cover.minY + 90 + CGFloat(i) * 118
             context.fill(Path(roundedRect: CGRect(x: cover.minX - 42, y: y, width: 96, height: 30), cornerRadius: 15),

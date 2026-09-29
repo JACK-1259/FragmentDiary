@@ -63,7 +63,8 @@ struct OnboardingView: View {
                 title: "쓰지 않아도\n쌓이는 일기",
                 message: "사진과 일정으로 오늘 하루의 조각을 미리 모아둘게요. 당신은 고르고, 한 줄만 더하면 돼요."
             ) {
-                FragmentStackIllustration()
+                MiniNotebook(scale: 5.8)
+                    .frame(maxWidth: .infinity)
             }
         case 1:
             OnboardingPage(

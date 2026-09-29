@@ -361,44 +361,6 @@ struct EventSummary: View {
     }
 }
 
-struct FragmentStackIllustration: View {
-    var body: some View {
-        ZStack {
-            tile(symbol: "text.quote", style: AnyShapeStyle(Mood.calm.color))
-                .rotationEffect(.degrees(-9))
-                .offset(x: -70, y: 14)
-            tile(symbol: "calendar", style: AnyShapeStyle(Mood.good.color))
-                .rotationEffect(.degrees(7))
-                .offset(x: 70, y: 4)
-            tile(symbol: "photo", style: AnyShapeStyle(.tint))
-                .rotationEffect(.degrees(-2))
-                .offset(y: -14)
-        }
-        .frame(height: 210)
-        .frame(maxWidth: .infinity)
-        .accessibilityHidden(true)
-    }
-
-    private func tile(symbol: String, style: AnyShapeStyle) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
-            RoundedRectangle(cornerRadius: 8, style: .continuous)
-                .fill(style.opacity(0.85))
-                .frame(height: 96)
-                .overlay {
-                    Image(systemName: symbol)
-                        .font(.system(size: 28, weight: .medium))
-                        .foregroundStyle(.white)
-                }
-            Capsule().fill(Color.hairline).frame(height: 6)
-            Capsule().fill(Color.hairline).frame(width: 52, height: 6)
-        }
-        .padding(8)
-        .frame(width: 124)
-        .background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(Color.card))
-        .shadow(color: .black.opacity(0.12), radius: 12, y: 6)
-    }
-}
-
 struct PrivacyShield: View {
     var body: some View {
         ZStack {
