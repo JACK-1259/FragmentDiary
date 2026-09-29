@@ -82,7 +82,7 @@ struct FragmentsWidgetView: View {
             HStack(alignment: .top) {
                 dateHeader
                 Spacer(minLength: 0)
-                MiniNotebook()
+                MiniNotebook(cover: .placing, scale: 1.2)
             }
             Spacer(minLength: 4)
             countBlock
@@ -106,7 +106,7 @@ struct FragmentsWidgetView: View {
             }
             Spacer(minLength: 0)
             VStack(alignment: .trailing, spacing: 8) {
-                MiniNotebook(scale: 1.6)
+                MiniNotebook(cover: .placing, scale: 1.6)
                     .padding(.top, 6)
                 Spacer(minLength: 0)
                 if let streakText {
@@ -155,81 +155,125 @@ struct FragmentsWidgetView: View {
     }
 }
 
-/// The app icon — a spiral diary whose cover is a pastel 3x3 jigsaw — drawn small for widget corners.
+/// The app icon — a spiral diary whose cover is a pastel jigsaw — drawn with SwiftUI.
 /// Geometry is in the icon's 1024-unit space so it stays identical to the app icon.
 struct MiniNotebook: View {
+    enum Cover {
+        /// The app icon's 3x3 cover with a title label on the center piece.
+        case icon
+        /// A 2x2 cover with the last piece lifting into place — bigger knobs, so it reads as a puzzle at widget size.
+        case placing
+    }
+
+    var cover: Cover = .icon
     var scale: CGFloat = 1
 
-    private static let bounds = CGRect(x: 163, y: 140, width: 690, height: 840)
-    private static let cover = CGRect(x: 205, y: 140, width: 630, height: 750)
+    private static let notebook = CGRect(x: 163, y: 140, width: 690, height: 840)
+    /// Extends past the notebook on the right and bottom to fit the lifted piece.
+    private static let placingBounds = CGRect(x: 163, y: 140, width: 830, height: 850)
+    private static let coverRect = CGRect(x: 205, y: 140, width: 630, height: 750)
     private static let coverRadius: CGFloat = 46
-    private static let vTab = [[true, false], [false, true], [true, true]]
-    private static let hTab = [[true, false, true], [false, true, false]]
 
-    private static let pieces: [Color] = [
+    private static let iconPieces: [Color] = [
         Color(light: 0xFFC9B0, dark: 0xE8B29C), Color(light: 0xFFE3A0, dark: 0xE8CD8E), Color(light: 0xC7E8C0, dark: 0xAED0A8),
         Color(light: 0xF3B8C8, dark: 0xDCA2B2), Color(light: 0xFFFBF3, dark: 0xEDE6DA), Color(light: 0xB0E0D8, dark: 0x9CC9C1),
         Color(light: 0xFFD8BF, dark: 0xE8C2AA), Color(light: 0xB8D4EC, dark: 0xA3BDD6), Color(light: 0xD8C7EE, dark: 0xC2B1DA),
     ]
+    private static let placingPieces: [Color] = [
+        Color(light: 0xFFC9B0, dark: 0xE8B29C), Color(light: 0xC7E8C0, dark: 0xAED0A8),
+        Color(light: 0xB8D4EC, dark: 0xA3BDD6), Color(light: 0xF3B8C8, dark: 0xDCA2B2),
+    ]
     private static let pages = Color(light: 0xFFF8EE, dark: 0x3A3348)
+    private static let ruledLine = Color(light: 0xE7DCCD, dark: 0x4A4258)
     private static let seam = Color(light: 0xFFFFFF, dark: 0x231E30)
     private static let rings = Color(light: 0x6B5E7A, dark: 0xB8AECB)
     private static let ribbon = Color(light: 0xE85D6F, dark: 0xE0677A)
     private static let title = Color(light: 0xC9B8A8, dark: 0x8E8070)
     private static let subtitle = Color(light: 0xDDD0C3, dark: 0xB2A594)
 
+    private var bounds: CGRect { cover == .icon ? Self.notebook : Self.placingBounds }
+
     var body: some View {
-        let width = 28 * scale
-        let height = width * Self.bounds.height / Self.bounds.width
+        let bounds = bounds
+        let width = 28 * scale * bounds.width / Self.notebook.width
         Canvas { context, size in
-            let k = size.width / Self.bounds.width
+            let k = size.width / bounds.width
             context.scaleBy(x: k, y: k)
-            context.translateBy(x: -Self.bounds.minX, y: -Self.bounds.minY)
+            context.translateBy(x: -bounds.minX, y: -bounds.minY)
             draw(in: &context, unitsPerPoint: 1 / k)
         }
-        .frame(width: width, height: height)
+        .frame(width: width, height: width * bounds.height / bounds.width)
         .accessibilityHidden(true)
     }
 
     private func draw(in context: inout GraphicsContext, unitsPerPoint: CGFloat) {
-        let cover = Self.cover
+        let rect = Self.coverRect
+        let n = cover == .icon ? 3 : 2
+        let vTab = n == 3 ? [[true, false], [false, true], [true, true]] : [[true], [false]]
+        let hTab = n == 3 ? [[true, false, true], [false, true, false]] : [[false, true]]
+        let cw = rect.width / CGFloat(n), ch = rect.height / CGFloat(n)
+        let knob = min(cw, ch) * 0.2
+        // Seams would vanish at widget size if scaled with the art, so they're held near one point wide.
+        let seamWidth = max(10, unitsPerPoint * 0.9)
+
+        func piece(_ r: Int, _ c: Int, in cell: CGRect) -> Path {
+            let top: PuzzleEdge = r == 0 ? .flat : (hTab[r - 1][c] ? .blank : .tab)
+            let left: PuzzleEdge = c == 0 ? .flat : (vTab[r][c - 1] ? .blank : .tab)
+            let right: PuzzleEdge = c == n - 1 ? .flat : (vTab[r][c] ? .tab : .blank)
+            let bottom: PuzzleEdge = r == n - 1 ? .flat : (hTab[r][c] ? .tab : .blank)
+            return puzzlePiece(cell, knob: knob, top: top, right: right, bottom: bottom, left: left)
+        }
+        func cell(_ r: Int, _ c: Int) -> CGRect {
+            CGRect(x: rect.minX + CGFloat(c) * cw, y: rect.minY + CGFloat(r) * ch, width: cw, height: ch)
+        }
 
         var ribbon = Path()
         ribbon.move(to: CGPoint(x: 690, y: 700))
         ribbon.addLines([CGPoint(x: 760, y: 700), CGPoint(x: 760, y: 980), CGPoint(x: 725, y: 945), CGPoint(x: 690, y: 980)])
         ribbon.closeSubpath()
         context.fill(ribbon, with: .color(Self.ribbon))
+        context.fill(Path(roundedRect: rect.offsetBy(dx: 18, dy: 18), cornerRadius: Self.coverRadius), with: .color(Self.pages))
 
-        context.fill(Path(roundedRect: cover.offsetBy(dx: 18, dy: 18), cornerRadius: Self.coverRadius), with: .color(Self.pages))
-
-        let cw = cover.width / 3, ch = cover.height / 3
-        let knob = min(cw, ch) * 0.2
-        // Seams would vanish at widget size if scaled with the art, so they're held near one point wide.
-        let seamWidth = max(10, unitsPerPoint * 0.9)
         context.drawLayer { layer in
-            layer.clip(to: Path(roundedRect: cover, cornerRadius: Self.coverRadius))
-            for r in 0..<3 {
-                for c in 0..<3 {
-                    let top: PuzzleEdge = r == 0 ? .flat : (Self.hTab[r - 1][c] ? .blank : .tab)
-                    let left: PuzzleEdge = c == 0 ? .flat : (Self.vTab[r][c - 1] ? .blank : .tab)
-                    let right: PuzzleEdge = c == 2 ? .flat : (Self.vTab[r][c] ? .tab : .blank)
-                    let bottom: PuzzleEdge = r == 2 ? .flat : (Self.hTab[r][c] ? .tab : .blank)
-                    let rect = CGRect(x: cover.minX + CGFloat(c) * cw, y: cover.minY + CGFloat(r) * ch, width: cw, height: ch)
-                    let piece = puzzlePiece(rect, knob: knob, top: top, right: right, bottom: bottom, left: left)
-                    layer.fill(piece, with: .color(Self.pieces[r * 3 + c]))
-                    layer.stroke(piece, with: .color(Self.seam), lineWidth: seamWidth)
+            layer.clip(to: Path(roundedRect: rect, cornerRadius: Self.coverRadius))
+            if cover == .placing {
+                // Ruled page showing through the empty slot.
+                layer.fill(Path(rect), with: .color(Self.pages))
+                for i in 0..<9 {
+                    layer.fill(Path(CGRect(x: rect.minX, y: rect.minY + 60 + CGFloat(i) * 76, width: rect.width, height: 10)),
+                               with: .color(Self.ruledLine))
                 }
+            }
+            for r in 0..<n {
+                for c in 0..<n where !(cover == .placing && r == 1 && c == 1) {
+                    let path = piece(r, c, in: cell(r, c))
+                    let colors = cover == .icon ? Self.iconPieces : Self.placingPieces
+                    layer.fill(path, with: .color(colors[r * n + c]))
+                    layer.stroke(path, with: .color(Self.seam), lineWidth: seamWidth)
+                }
+            }
+            if cover == .icon {
+                layer.fill(Path(roundedRect: CGRect(x: rect.midX - 80, y: rect.midY - 30, width: 160, height: 20), cornerRadius: 10),
+                           with: .color(Self.title))
+                layer.fill(Path(roundedRect: CGRect(x: rect.midX - 55, y: rect.midY + 12, width: 110, height: 16), cornerRadius: 8),
+                           with: .color(Self.subtitle))
             }
         }
 
-        context.fill(Path(roundedRect: CGRect(x: cover.midX - 80, y: cover.midY - 30, width: 160, height: 20), cornerRadius: 10),
-                     with: .color(Self.title))
-        context.fill(Path(roundedRect: CGRect(x: cover.midX - 55, y: cover.midY + 12, width: 110, height: 16), cornerRadius: 8),
-                     with: .color(Self.subtitle))
         for i in 0..<6 {
-            let y = cover.minY + 90 + CGFloat(i) * 118
-            context.fill(Path(roundedRect: CGRect(x: cover.minX - 42, y: y, width: 96, height: 30), cornerRadius: 15),
+            let y = rect.minY + 90 + CGFloat(i) * 118
+            context.fill(Path(roundedRect: CGRect(x: rect.minX - 42, y: y, width: 96, height: 30), cornerRadius: 15),
                          with: .color(Self.rings))
+        }
+
+        if cover == .placing {
+            // The last piece, lifted out of its slot and tilted, about to drop in.
+            var lifted = context
+            lifted.translateBy(x: rect.minX + cw + 120 + cw / 2, y: rect.minY + ch + 70 + ch / 2)
+            lifted.rotate(by: .radians(0.18))
+            lifted.translateBy(x: -cw / 2, y: -ch / 2)
+            lifted.addFilter(.shadow(color: .black.opacity(0.22), radius: 12 * unitsPerPoint / 4, x: 0, y: 10))
+            lifted.fill(piece(1, 1, in: CGRect(x: 0, y: 0, width: cw, height: ch)), with: .color(Self.placingPieces[3]))
         }
     }
 }
