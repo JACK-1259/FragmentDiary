@@ -22,6 +22,7 @@ struct EntryDetailView: View {
                         DayHeader(day: entry.day)
                         EntryContentView(entry: entry)
                     }
+                    .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(.horizontal, 20)
                     .padding(.top, 8)
                     .padding(.bottom, 32)

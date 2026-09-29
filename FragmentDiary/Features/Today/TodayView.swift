@@ -171,6 +171,7 @@ private struct CompletedTodayView<Accessory: View>: View {
                 Button("수정하기", action: onEdit)
                     .buttonStyle(SecondaryButtonStyle())
             }
+            .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.horizontal, 20)
             .padding(.top, 16)
             .padding(.bottom, 32)

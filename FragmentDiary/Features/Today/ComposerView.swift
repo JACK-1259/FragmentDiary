@@ -40,6 +40,8 @@ struct ComposerView<Accessory: View>: View {
         .onChange(of: pickedPhotos) { _, items in addPicked(items) }
     }
 
+    private var isToday: Bool { Calendar.current.isDateInToday(draft.day) }
+
     private var subtitle: String {
         let count = draft.items.count
         if Calendar.current.isDateInToday(draft.day) {
@@ -97,7 +99,7 @@ struct ComposerView<Accessory: View>: View {
 
     private var oneLineSection: some View {
         VStack(alignment: .leading, spacing: 20) {
-            TextField("오늘을 한 줄로 남긴다면?", text: $draft.note, axis: .vertical)
+            TextField(isToday ? "오늘을 한 줄로 남긴다면?" : "그날을 한 줄로 남긴다면?", text: $draft.note, axis: .vertical)
                 .font(.system(.title3, design: .serif))
                 .lineLimit(1...4)
                 .padding(18)
@@ -105,7 +107,7 @@ struct ComposerView<Accessory: View>: View {
             if let cover = draft.coverItem {
                 VStack(alignment: .leading, spacing: 12) {
                     Toggle(isOn: $draft.showCover.animation(.snappy)) {
-                        Text("오늘의 커버 사진")
+                        Text(isToday ? "오늘의 커버 사진" : "그날의 커버 사진")
                             .font(.subheadline.weight(.medium))
                             .foregroundStyle(Color.ink)
                     }

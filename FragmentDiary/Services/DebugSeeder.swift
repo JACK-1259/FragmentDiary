@@ -23,10 +23,12 @@ enum DebugSeeder {
         let store = EKEventStore()
         guard let calendar = store.defaultCalendarForNewEvents else { return }
         let today = Calendar.current.startOfDay(for: .now)
-        let existing = Set(sampleWindowEvents(in: store).compactMap(\.title))
+        // Keyed by day too: yesterday's copy of a sample must not suppress today's.
+        let existing = Set(sampleWindowEvents(in: store).map { "\($0.title ?? "")@\(Calendar.current.startOfDay(for: $0.startDate))" })
 
-        for sample in samples where !existing.contains(sample.title) {
-            guard let day = Calendar.current.date(byAdding: .day, value: sample.dayOffset, to: today) else { continue }
+        for sample in samples {
+            guard let day = Calendar.current.date(byAdding: .day, value: sample.dayOffset, to: today),
+                  !existing.contains("\(sample.title)@\(day)") else { continue }
             let event = EKEvent(eventStore: store)
             event.calendar = calendar
             event.title = sample.title

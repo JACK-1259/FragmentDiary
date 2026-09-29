@@ -3,6 +3,8 @@ import SwiftUI
 struct HistoryView: View {
     @Environment(JournalStore.self) private var store
     @State private var showBackfill = false
+    @State private var path: [UUID] = []
+    @State private var backfillTarget: BackfillTarget?
 
     private var months: [(month: Date, entries: [DiaryEntry])] {
         let calendar = Calendar.current
@@ -15,12 +17,17 @@ struct HistoryView: View {
     }
 
     var body: some View {
-        NavigationStack {
+        NavigationStack(path: $path) {
             ScrollView {
                 if store.entries.isEmpty {
                     emptyState
                 } else {
                     LazyVStack(alignment: .leading, spacing: 12) {
+                        MonthCalendarView(entries: store.entries) { entry in
+                            path.append(entry.id)
+                        } onFill: { day in
+                            backfillTarget = BackfillTarget(day: day)
+                        }
                         stats
                         ForEach(months, id: \.month) { group in
                             Text(DateText.month(group.month))
@@ -55,6 +62,9 @@ struct HistoryView: View {
             }
             .sheet(isPresented: $showBackfill) {
                 BackfillPickerView { showBackfill = false }
+            }
+            .sheet(item: $backfillTarget) { target in
+                BackfillComposer(day: target.day) { backfillTarget = nil }
             }
         }
     }
