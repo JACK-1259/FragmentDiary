@@ -46,6 +46,9 @@ final class DraftModel: Identifiable {
             if let index = items.firstIndex(where: { $0.id == fragment.sourceID }) {
                 var refreshed = fragment
                 refreshed.caption = items[index].fragment.caption
+                // Decorations belong to the user, not the collector; keep them for photos still in the moment.
+                refreshed.decorations = items[index].fragment.decorations?.filter { refreshed.assetIDs.contains($0.key) }
+                if refreshed.decorations?.isEmpty == true { refreshed.decorations = nil }
                 items[index].fragment = refreshed
             } else {
                 items.append(Item(fragment: fragment, included: existing == nil && preselectCollected, isNew: existing != nil))
@@ -93,7 +96,9 @@ final class DraftModel: Identifiable {
         case .fragments:
             chosen = items.filter(\.included).map(\.fragment)
         case .oneLine:
-            chosen = showCover ? [coverItem?.fragment].compactMap { $0 } : []
+            // A drawing page is its own record of the day, so the one-line mode keeps it alongside the cover.
+            let drawings = items.filter { $0.included && $0.fragment.kind == .drawing }.map(\.fragment)
+            chosen = (showCover ? [coverItem?.fragment].compactMap { $0 } : []) + drawings
         }
         let fragments = chosen.compactMap { fragment -> Fragment? in
             var fragment = fragment

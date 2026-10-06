@@ -175,6 +175,7 @@ private struct CompletedTodayView<Accessory: View>: View {
             .padding(.horizontal, 20)
             .padding(.top, 16)
             .padding(.bottom, 32)
+            .readableColumn()
         }
         .background(Color.paper)
     }

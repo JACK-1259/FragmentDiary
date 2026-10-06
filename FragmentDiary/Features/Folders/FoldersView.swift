@@ -34,6 +34,7 @@ struct FoldersView: View {
                     }
                     .padding(.horizontal, 20)
                     .padding(.bottom, 32)
+                    .readableColumn()
                 }
             }
             .background(Color.paper)

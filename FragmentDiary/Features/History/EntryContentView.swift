@@ -42,11 +42,12 @@ private struct FragmentReadView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             switch fragment.kind {
-            case .photos: PhotoCollage(assetIDs: fragment.assetIDs, height: 150)
+            case .photos: PhotoCollage(photos: fragment.photos, height: 150)
             case .event: EventSummary(fragment: fragment)
             case .note: EmptyView()
+            case .drawing: DrawingPageView(fragment: fragment, day: fragment.start)
             }
-            if !fragment.caption.isEmpty {
+            if !fragment.caption.isEmpty && fragment.kind != .drawing {
                 Text(fragment.caption)
                     .font(fragment.kind == .note ? .body : .subheadline)
                     .foregroundStyle(Color.ink)

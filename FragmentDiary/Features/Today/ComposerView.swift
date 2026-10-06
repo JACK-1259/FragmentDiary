@@ -32,6 +32,7 @@ struct ComposerView<Accessory: View>: View {
             .padding(.horizontal, 20)
             .padding(.top, 16)
             .padding(.bottom, 24)
+            .readableColumn()
         }
         .scrollDismissesKeyboard(.interactively)
         .background(Color.paper)
@@ -112,7 +113,7 @@ struct ComposerView<Accessory: View>: View {
                             .foregroundStyle(Color.ink)
                     }
                     if draft.showCover {
-                        PhotoCollage(assetIDs: cover.fragment.assetIDs, height: 170)
+                        PhotoCollage(photos: cover.fragment.photos, height: 170)
                     }
                 }
             }
@@ -136,6 +137,7 @@ struct ComposerView<Accessory: View>: View {
         .padding(.horizontal, 20)
         .padding(.top, 20)
         .padding(.bottom, 10)
+        .readableColumn()
         .background {
             LinearGradient(colors: [Color.paper.opacity(0), Color.paper], startPoint: .top, endPoint: .init(x: 0.5, y: 0.35))
                 .ignoresSafeArea()
@@ -166,7 +168,7 @@ private struct FragmentCard: View {
                 Spacer(minLength: 0)
                 accessory
             }
-            if item.fragment.kind != .note && item.included {
+            if item.fragment.kind != .note && item.fragment.kind != .drawing && item.included {
                 TextField("한 줄 덧붙이기", text: $item.fragment.caption, axis: .vertical)
                     .font(.subheadline)
                     .lineLimit(1...4)
@@ -187,14 +189,20 @@ private struct FragmentCard: View {
         switch item.fragment.kind {
         case .photos:
             VStack(alignment: .leading, spacing: 8) {
-                PhotoCollage(assetIDs: item.fragment.assetIDs, height: 140)
+                PhotoCollage(photos: item.fragment.photos, height: 140)
                 HStack(spacing: 6) {
                     Text("사진 \(item.fragment.assetIDs.count)장")
                     if item.isNew { NewBadge() }
+                    if item.included {
+                        Text("·")
+                        DecoratePhotoButton(fragment: $item.fragment)
+                    }
                 }
                 .font(.caption.weight(.medium))
                 .foregroundStyle(Color.inkMuted)
             }
+        case .drawing:
+            DrawingFragmentPreview(fragment: item.fragment)
         case .event:
             EventSummary(fragment: item.fragment, isNew: item.isNew)
         case .note:
@@ -225,6 +233,36 @@ private struct FragmentCard: View {
             }
             .buttonStyle(.plain)
             .accessibilityLabel(item.included ? "일기에서 빼기" : "일기에 넣기")
+        }
+    }
+}
+
+/// A drawing page inside the composer or a list; the page itself is edited from the 그림 tab.
+struct DrawingFragmentPreview: View {
+    let fragment: Fragment
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            if let id = fragment.drawingID {
+                JournalAttachmentImage(attachmentID: id)
+                    .aspectRatio(DrawingDiary.aspectRatio, contentMode: .fit)
+                    .frame(maxWidth: 260)
+                    .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
+                    .overlay(RoundedRectangle(cornerRadius: 6, style: .continuous).stroke(Color.hairline, lineWidth: 0.5))
+            }
+            HStack(spacing: 6) {
+                Label("그림일기", systemImage: "scribble.variable")
+                if let weather = fragment.weather {
+                    Image(systemName: weather.symbol).foregroundStyle(weather.color)
+                }
+            }
+            .font(.caption.weight(.medium))
+            .foregroundStyle(Color.inkMuted)
+            if !fragment.caption.isEmpty {
+                Text(fragment.caption)
+                    .font(.system(.subheadline, design: .serif))
+                    .foregroundStyle(Color.ink)
+            }
         }
     }
 }

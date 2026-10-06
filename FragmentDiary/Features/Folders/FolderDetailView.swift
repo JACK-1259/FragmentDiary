@@ -4,6 +4,7 @@ struct FolderDetailView: View {
     let folderID: UUID
 
     @Environment(FolderStore.self) private var folderStore
+    @Environment(JournalStore.self) private var store
     @Environment(FragmentCollector.self) private var collector
     @Environment(\.dismiss) private var dismiss
     @State private var composeDraft: DraftModel?
@@ -38,6 +39,7 @@ struct FolderDetailView: View {
                     .padding(.horizontal, 20)
                     .padding(.top, 8)
                     .padding(.bottom, 24)
+                    .readableColumn()
                 }
                 .safeAreaInset(edge: .bottom) {
                     Button("이 폴더에 쓰기", action: startCompose)
@@ -131,7 +133,9 @@ struct FolderDetailView: View {
     }
 
     private func startCompose() {
-        composeDraft = DraftModel(day: .now, existing: nil, collected: collector.collect(on: .now), preselectCollected: false)
+        // Today's drawing page is offered too, unchecked like everything else.
+        let drawing = store.entry(on: .now)?.drawing.map { [$0] } ?? []
+        composeDraft = DraftModel(day: .now, existing: nil, collected: collector.collect(on: .now) + drawing, preselectCollected: false)
     }
 
     private func deletePost(_ post: SharedPost) {
@@ -210,8 +214,14 @@ private struct PostCard: View {
                         EventSummary(fragment: fragment.asFragment)
                     case .note:
                         EmptyView()
+                    case .drawing:
+                        if let id = fragment.attachmentIDs.first {
+                            NotebookPage(day: fragment.start, weather: fragment.weather, text: fragment.caption) {
+                                AttachmentThumbnail(attachmentID: id)
+                            }
+                        }
                     }
-                    if !fragment.caption.isEmpty {
+                    if !fragment.caption.isEmpty && fragment.kind != .drawing {
                         Text(fragment.caption)
                             .font(fragment.kind == .note ? .body : .subheadline)
                             .foregroundStyle(Color.ink)
@@ -235,6 +245,7 @@ private struct FolderComposeSheet: View {
     let onClose: () -> Void
 
     @Environment(FolderStore.self) private var folderStore
+    @Environment(JournalStore.self) private var store
     @State private var isPosting = false
     @State private var errorText: String?
 
@@ -284,7 +295,7 @@ private struct FolderComposeSheet: View {
         isPosting = true
         Task {
             do {
-                try await folderStore.post(entry, to: folder.id, author: LocalIdentity.id)
+                try await folderStore.post(entry, to: folder.id, author: LocalIdentity.id, journalImage: store.attachmentData)
                 onClose()
             } catch {
                 errorText = error.localizedDescription

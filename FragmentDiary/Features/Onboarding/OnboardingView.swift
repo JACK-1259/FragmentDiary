@@ -51,6 +51,7 @@ struct OnboardingView: View {
             }
             .padding(.horizontal, 24)
             .padding(.bottom, 12)
+            .readableColumn(560)
         }
         .background(Color.paper.ignoresSafeArea())
     }
@@ -170,6 +171,7 @@ private struct OnboardingPage<Top: View, Bottom: View>: View {
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.horizontal, 28)
+        .readableColumn(560)
     }
 }
 

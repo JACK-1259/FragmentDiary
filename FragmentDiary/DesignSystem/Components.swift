@@ -66,6 +66,13 @@ extension View {
     }
 }
 
+extension View {
+    /// Keeps reading columns comfortable on iPad; iPhone widths are below the cap, so nothing changes there.
+    func readableColumn(_ maxWidth: CGFloat = 720) -> some View {
+        frame(maxWidth: maxWidth).frame(maxWidth: .infinity)
+    }
+}
+
 struct DayHeader: View {
     let day: Date
     var subtitle: String?
@@ -220,18 +227,6 @@ struct AssetThumbnail: View {
     }
 }
 
-enum PhotoRef: Hashable {
-    case asset(String)
-    case attachment(UUID)
-
-    var seed: String {
-        switch self {
-        case .asset(let id): id
-        case .attachment(let id): id.uuidString
-        }
-    }
-}
-
 struct PhotoRefThumbnail: View {
     let photo: PhotoRef
 
@@ -239,7 +234,27 @@ struct PhotoRefThumbnail: View {
         switch photo {
         case .asset(let id): AssetThumbnail(assetID: id)
         case .attachment(let id): AttachmentThumbnail(attachmentID: id)
+        case .journal(let id): JournalAttachmentThumbnail(attachmentID: id)
         }
+    }
+}
+
+struct JournalAttachmentThumbnail: View {
+    let attachmentID: UUID
+    @Environment(JournalStore.self) private var store
+
+    var body: some View {
+        Rectangle()
+            .fill(Color.hairline)
+            .overlay {
+                if let image = store.attachmentImage(attachmentID) {
+                    Image(uiImage: image)
+                        .resizable()
+                        .scaledToFill()
+                }
+            }
+            .clipped()
+            .accessibilityHidden(true)
     }
 }
 

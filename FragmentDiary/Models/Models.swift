@@ -26,8 +26,55 @@ nonisolated enum Mood: Int, Codable, CaseIterable, Identifiable, Sendable {
     }
 }
 
+/// Where a displayed image comes from: the photo library, a shared-folder copy, or a sealed journal attachment (decorated photo or drawing).
+nonisolated enum PhotoRef: Hashable, Sendable {
+    case asset(String)
+    case attachment(UUID)
+    case journal(UUID)
+
+    var seed: String {
+        switch self {
+        case .asset(let id): id
+        case .attachment(let id), .journal(let id): id.uuidString
+        }
+    }
+}
+
 nonisolated enum FragmentKind: String, Codable, Sendable {
-    case photos, event, note
+    case photos, event, note, drawing
+}
+
+nonisolated enum Weather: String, Codable, CaseIterable, Identifiable, Sendable {
+    case sunny, cloudy, rainy, snowy
+
+    var id: String { rawValue }
+
+    var label: String {
+        switch self {
+        case .sunny: "맑음"
+        case .cloudy: "흐림"
+        case .rainy: "비"
+        case .snowy: "눈"
+        }
+    }
+
+    var symbol: String {
+        switch self {
+        case .sunny: "sun.max.fill"
+        case .cloudy: "cloud.fill"
+        case .rainy: "cloud.rain.fill"
+        case .snowy: "snowflake"
+        }
+    }
+
+    var color: Color {
+        switch self {
+        case .sunny: Color(rgb: 0xF2B33D)
+        case .cloudy: Color(rgb: 0x9AA6B2)
+        case .rainy: Color(rgb: 0x6E9BD1)
+        case .snowy: Color(rgb: 0x8CC4E0)
+        }
+    }
 }
 
 nonisolated struct Fragment: Codable, Hashable, Identifiable, Sendable {
@@ -39,18 +86,35 @@ nonisolated struct Fragment: Codable, Hashable, Identifiable, Sendable {
     var place: String?
     var assetIDs: [String] = []
     var caption: String = ""
+    /// A drawing page's sealed attachment (rendered image + editable strokes).
+    var drawingID: UUID?
+    var weather: Weather?
+    /// Photos the user decorated, keyed by library asset ID. The value is a sealed attachment that replaces the original on display.
+    var decorations: [String: UUID]?
 
     var id: String { sourceID }
+
+    var photos: [PhotoRef] {
+        assetIDs.map { assetID in decorations?[assetID].map(PhotoRef.journal) ?? .asset(assetID) }
+    }
+
+    /// Every sealed attachment this fragment owns, so they can be cleaned up when it goes away.
+    var attachmentIDs: [UUID] {
+        [drawingID].compactMap { $0 } + (decorations.map { Array($0.values) } ?? [])
+    }
 
     var summaryLine: String {
         let base: String
         switch kind {
         case .photos:
-            base = "사진 \(assetIDs.count)장"
+            let decorated = decorations?.isEmpty == false ? " (꾸밈)" : ""
+            base = "사진 \(assetIDs.count)장\(decorated)"
         case .event:
             base = [title, place.map { "@ \($0)" }].compactMap { $0 }.joined(separator: " ")
         case .note:
             return caption
+        case .drawing:
+            base = ["그림일기", weather.map { "날씨 \($0.label)" }].compactMap { $0 }.joined(separator: " · ")
         }
         return caption.isEmpty ? base : "\(base) — \(caption)"
     }
@@ -67,6 +131,15 @@ nonisolated struct DiaryEntry: Codable, Hashable, Identifiable, Sendable {
     var updatedAt: Date
 
     var photoIDs: [String] { fragments.flatMap(\.assetIDs) }
+
+    /// Thumbnails for list rows: drawings first, then (decorated) photos.
+    var previewPhotos: [PhotoRef] {
+        fragments.compactMap { $0.drawingID.map(PhotoRef.journal) } + fragments.flatMap(\.photos)
+    }
+
+    var drawing: Fragment? { fragments.first { $0.kind == .drawing } }
+
+    var attachmentIDs: Set<UUID> { Set(fragments.flatMap(\.attachmentIDs)) }
 
     var isBackfilled: Bool { !Calendar.current.isDate(createdAt, inSameDayAs: day) }
 

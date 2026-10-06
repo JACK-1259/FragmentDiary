@@ -21,9 +21,10 @@ nonisolated struct PostFragment: Codable, Hashable, Identifiable, Sendable {
     var place: String?
     var caption: String
     var attachmentIDs: [UUID]
+    var weather: Weather?
 
     var asFragment: Fragment {
-        Fragment(sourceID: id.uuidString, kind: kind, start: start, end: end, title: title, place: place, caption: caption)
+        Fragment(sourceID: id.uuidString, kind: kind, start: start, end: end, title: title, place: place, caption: caption, weather: weather)
     }
 }
 

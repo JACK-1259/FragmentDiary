@@ -48,6 +48,7 @@ struct LockScreenView: View {
             }
         }
         .padding(24)
+        .readableColumn(520)
         #if !DEBUG
         .task {
             if scenePhase == .active { await autoUnlock() }

@@ -44,6 +44,7 @@ struct HistoryView: View {
                     }
                     .padding(.horizontal, 20)
                     .padding(.bottom, 32)
+                    .readableColumn()
                 }
             }
             .background(Color.paper)
@@ -143,8 +144,8 @@ private struct DayCard: View {
                         .lineLimit(3)
                         .multilineTextAlignment(.leading)
                 }
-                if !entry.photoIDs.isEmpty {
-                    MiniCollage(assetIDs: entry.photoIDs)
+                if !entry.previewPhotos.isEmpty {
+                    MiniCollage(photos: entry.previewPhotos)
                 }
                 meta
             }
@@ -177,12 +178,12 @@ private struct DayCard: View {
 
 /// First photo wider than the rest — an uneven strip rather than a uniform grid.
 private struct MiniCollage: View {
-    let assetIDs: [String]
+    let photos: [PhotoRef]
 
     var body: some View {
         HStack(spacing: 6) {
-            ForEach(Array(assetIDs.prefix(3).enumerated()), id: \.element) { index, id in
-                AssetThumbnail(assetID: id)
+            ForEach(Array(photos.prefix(3).enumerated()), id: \.element) { index, photo in
+                PhotoRefThumbnail(photo: photo)
                     .frame(width: index == 0 ? 96 : 60, height: 64)
                     .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
             }

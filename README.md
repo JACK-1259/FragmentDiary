@@ -12,6 +12,7 @@
 <p align="center">
   <img src="docs/images/onboarding.png" width="200" alt="온보딩: 쓰지 않아도 쌓이는 일기">
   <img src="docs/images/today.png" width="200" alt="오늘 탭: 사진과 일정이 시간순 조각으로 모여 있는 화면">
+  <img src="docs/images/drawing.png" width="200" alt="그림 탭: 그림일기 공책에 그린 오늘의 그림">
   <img src="docs/images/history.png" width="200" alt="기록 탭: 쓴 날과 놓친 날이 보이는 한 달 캘린더">
   <img src="docs/images/widget.png" width="200" alt="홈 화면 위젯: 오늘 모인 조각 수와 연속 기록">
 </p>
@@ -22,6 +23,9 @@
 
 - **조각 자동 수집**: 오늘 찍은 사진(1시간 안에 찍은 사진은 한 묶음, 스크린샷 제외)과 이미 지난 캘린더 일정이 시간순 타임라인으로 모여 있어요.
 - **고르고 한 줄만**: 조각을 체크하고 원하면 한 줄씩 덧붙이면 끝이에요. 메모 조각, 사진 추가, 무드(오늘의 결)도 고를 수 있어요.
+- **그림일기**: 글 대신 그림으로 하루를 남기는 탭이에요. 날짜·날씨 칸, 그림 칸, 원고지 칸이 있는 그림일기 공책에 연필·크레용·형광펜·펜으로 그리고 스티커를 붙여요. 지난 그림은 앨범으로 모여요.
+- **사진 꾸미기**: 일기에 넣은 사진 위에 그림을 그리거나 이모지·글자 스티커를 붙여요. 원본 사진은 그대로 두고 꾸민 사본만 암호화해 저장하며, 나중에 다시 열어 고칠 수 있어요.
+- **iPad와 Apple Pencil**: iPad에서도 실행돼요. 펜슬 더블탭으로 지우개 전환, "Apple Pencil로만 그리기" 설정을 따라요. iPhone에서는 손가락으로 그려요.
 - **한 줄 모드**: 바쁜 날엔 무드와 한 줄만으로 기록이 완성돼요. 사진이 가장 많은 묶음이 커버로 붙어요.
 - **놓친 날 채우기**: 최근 7일 중 기록이 없는데 조각이 남은 날을 오늘 탭 배너로 알려줘요. 기록 탭 달력에서 아무 날이나 골라 채울 수도 있어요.
 - **한 달 캘린더**: 쓴 날은 무드 색으로, 놓친 날은 점선으로 보여요. 누르면 그날 기록이 열리거나 바로 채우기가 시작돼요.
@@ -99,6 +103,7 @@ sequenceDiagram
 | **백그라운드 진입 시 잠금** | 메모리의 기록과 키를 비우고, 앱 전환 화면에는 앱 이름만 보여요. |
 | **모두 삭제 = 키 파기** | 파일과 함께 키체인의 키도 지워서, 남은 사본이 있어도 읽을 수 없어요. |
 | **폴더 사진도 봉인** | 폴더에 올린 사진은 JPEG로 복사해 같은 키로 암호화해 저장해요. |
+| **그림·꾸민 사진도 봉인** | 그림일기와 꾸민 사진은 완성 이미지와 다시 고칠 수 있는 레이어(획·스티커)를 `JournalAttachments/`에 같은 키로 따로 봉인해요. 기록을 지우면 함께 지워지고, 어디에도 쓰이지 않는 파일은 잠금을 풀 때 정리돼요. |
 
 ### 3. 기록하기
 
@@ -106,6 +111,8 @@ sequenceDiagram
 |---|---|---|
 | 오늘 | 조각 체크 → 캡션(선택) → 무드(선택) → 완성 | [`TodayView`](FragmentDiary/Features/Today/TodayView.swift), [`ComposerView`](FragmentDiary/Features/Today/ComposerView.swift) |
 | 바쁜 날 | "한 줄로" → 무드와 한 줄 → 완성 | 같음 |
+| 그림으로 | 그림 탭 → 그리기·스티커·날씨·원고지 한 줄 → 저장 (그날 기록에 그림 조각으로 들어가요) | [`DrawingTabView`](FragmentDiary/Features/Drawing/DrawingTabView.swift), [`DrawingEditorView`](FragmentDiary/Features/Drawing/DrawingEditorView.swift) |
+| 사진 꾸미기 | 사진 조각의 "꾸미기" → 그리기·스티커 → 완료 | [`PhotoDecoratorView`](FragmentDiary/Features/Decorate/PhotoDecoratorView.swift) |
 | 놓친 날 | 배너 또는 달력에서 날짜 선택 → 그날 남은 조각으로 작성 | [`BackfillViews`](FragmentDiary/Features/Backfill/BackfillViews.swift), [`MonthCalendarView`](FragmentDiary/Features/History/MonthCalendarView.swift) |
 | 수정·삭제 | 기록 탭 → 상세 → 메뉴 | [`EntryDetailView`](FragmentDiary/Features/History/EntryDetailView.swift) |
 
@@ -155,6 +162,8 @@ FragmentDiary/
 │  ├─ DesignSystem/                카드·버튼·타임라인·사진 콜라주 등 공용 컴포넌트
 │  ├─ Features/
 │  │  ├─ Today/                    오늘 탭, 조각 작성 화면, 초안 모델
+│  │  ├─ Drawing/                  그림 탭, 그림일기 공책, 그림 편집기
+│  │  ├─ Decorate/                 PencilKit 캔버스, 스티커, 사진 꾸미기, 이미지 합성
 │  │  ├─ Backfill/                 놓친 날 채우기(배너, 날짜 선택)
 │  │  ├─ History/                  기록 목록, 한 달 캘린더, 상세
 │  │  ├─ Folders/                  함께 쓰는 폴더
@@ -178,7 +187,7 @@ FragmentDiary/
 - **빈 페이지를 없애기**: 사용자가 쓰기 전에 앱이 먼저 모아 두고, 사용자는 고르기만 해요. 글은 선택이에요.
 - **죄책감 없는 기록**: 연속 기록은 2일 이상일 때만 조용히 보여주고, 놓친 날은 혼내지 않고 채울 기회로 보여줘요.
 - **기기 밖으로 나가지 않기**: 계정·서버·분석 도구가 없어요. 공유는 사용자가 고른 것만, 명시적으로요.
-- **외부 라이브러리 없음**: PhotoKit, EventKit, CryptoKit, LocalAuthentication, WidgetKit만 써요.
+- **외부 라이브러리 없음**: PhotoKit, EventKit, CryptoKit, LocalAuthentication, WidgetKit, PencilKit만 써요.
 
 ---
 
@@ -227,6 +236,7 @@ swift Tools/MakeSamplePhotos.swift /tmp/samples && xcrun simctl addmedia booted 
 | 암호화 백업 | 텍스트(Markdown) 내보내기만 있고, 암호화 백업·복원은 아직 없어요. 내보낸 텍스트는 암호화되지 않아요. |
 | 자동 테스트 | 아직 없어요. 시뮬레이터에서 기능을 직접 돌려 확인했어요. |
 | 언어 | 한국어만 지원해요. |
+| Apple Pencil | 필압·더블탭은 실제 iPad와 펜슬에서 확인하지 못했어요(시뮬레이터에서는 손가락 입력으로만 확인). |
 
 ## 개인정보
 
@@ -250,3 +260,4 @@ swift Tools/MakeSamplePhotos.swift /tmp/samples && xcrun simctl addmedia booted 
 6. **아이콘과 테마**: 아이콘은 카드 → 퍼즐 조각 한 개 → 여러 조각 → 꽉 찬 퍼즐을 거쳐, 후보 5개 중 **퍼즐 표지 일기장**으로 정했어요. 테마 색은 6가지 + 직접 고르기.
 7. **다듬기**: 위젯 그림을 "마지막 조각을 끼우는 노트"로, 앱 안 그림을 아이콘과 같은 그림으로 통일했어요. (7조각 요일 퍼즐도 시도했다가 되돌렸어요.)
 8. **전체 점검과 캘린더**: 새로 설치해 처음부터 전 기능을 돌리며 버그 2개를 고치고, 쓴 날·놓친 날이 보이는 한 달 캘린더를 추가했어요.
+9. **그림일기와 사진 꾸미기**: "글이 아니라 그림으로 하루를 남기고 싶다"는 요청으로 그림 탭을 더했어요. 시안 3개(그림일기 공책·스케치북·앨범) 중 앨범으로 모아 보고 공책에 그리는 조합을 골랐어요. 같은 캔버스로 사진 위에 그리기·스티커도 붙일 수 있게 했고, iPad와 Apple Pencil을 지원해요.

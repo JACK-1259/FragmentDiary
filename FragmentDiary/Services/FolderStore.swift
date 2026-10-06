@@ -59,18 +59,28 @@ final class FolderStore {
     }
 
     /// Copies the chosen photos out of the library into sealed attachments, then adds the post.
-    func post(_ entry: DiaryEntry, to folderID: UUID, author: UUID) async throws {
+    /// Decorated photos and drawing pages are copied from the journal's own attachments via `journalImage`.
+    func post(_ entry: DiaryEntry, to folderID: UUID, author: UUID, journalImage: (UUID) -> Data?) async throws {
         guard let key else { throw JournalStore.StoreError.locked }
         var fragments: [PostFragment] = []
         for fragment in entry.fragments {
             var attachmentIDs: [UUID] = []
-            for assetID in fragment.assetIDs.prefix(Self.maxPhotosPerFragment) {
-                guard let data = await PhotoExport.jpeg(assetID: assetID, maxSide: Self.attachmentMaxSide) else { continue }
+            if let drawingID = fragment.drawingID, let data = journalImage(drawingID) {
                 let id = UUID()
                 try SealedFile.writeData(data, to: attachmentURL(id), key: key)
                 attachmentIDs.append(id)
             }
-            if fragment.kind == .photos && attachmentIDs.isEmpty && fragment.caption.isEmpty { continue }
+            for assetID in fragment.assetIDs.prefix(Self.maxPhotosPerFragment) {
+                var data = fragment.decorations?[assetID].flatMap(journalImage)
+                if data == nil {
+                    data = await PhotoExport.jpeg(assetID: assetID, maxSide: Self.attachmentMaxSide)
+                }
+                guard let data else { continue }
+                let id = UUID()
+                try SealedFile.writeData(data, to: attachmentURL(id), key: key)
+                attachmentIDs.append(id)
+            }
+            if (fragment.kind == .photos || fragment.kind == .drawing) && attachmentIDs.isEmpty && fragment.caption.isEmpty { continue }
             fragments.append(PostFragment(
                 id: UUID(),
                 kind: fragment.kind,
@@ -79,7 +89,8 @@ final class FolderStore {
                 title: fragment.title,
                 place: fragment.place,
                 caption: fragment.caption,
-                attachmentIDs: attachmentIDs
+                attachmentIDs: attachmentIDs,
+                weather: fragment.weather
             ))
         }
         let post = SharedPost(id: UUID(), authorID: author, day: entry.day, createdAt: .now, mood: entry.mood, note: entry.note, fragments: fragments)

@@ -26,6 +26,7 @@ struct EntryDetailView: View {
                     .padding(.horizontal, 20)
                     .padding(.top, 8)
                     .padding(.bottom, 32)
+                    .readableColumn()
                 }
                 .toolbar {
                     ToolbarItem(placement: .topBarTrailing) {
