@@ -13,6 +13,11 @@ enum DebugSeeder {
         ("요가 클래스", nil, 0, 19, 30, 60),
         ("수진이 생일 저녁", "을지로 이자카야", -1, 19, 0, 150),
     ]
+    /// Finished reminders: (title, days ago, completion hour, minute).
+    private static let sampleReminders: [(title: String, dayOffset: Int, hour: Int, minute: Int)] = [
+        ("치과 예약", 0, 9, 20),
+        ("택배 반품하기", -1, 18, 40),
+    ]
     private static let samplePhotoPrefixes = ["sample_", "yesterday_"]
 
     static func seedIfRequested() {
@@ -37,6 +42,28 @@ enum DebugSeeder {
             event.endDate = event.startDate.addingTimeInterval(TimeInterval(sample.minutes * 60))
             try? store.save(event, span: .thisEvent)
         }
+        seedReminders(in: store)
+    }
+
+    private static func seedReminders(in store: EKEventStore) {
+        guard EKEventStore.authorizationStatus(for: .reminder) == .fullAccess,
+              let list = store.defaultCalendarForNewReminders() else { return }
+        let today = Calendar.current.startOfDay(for: .now)
+        // Reminders can only be fetched asynchronously, so a per-day marker keeps relaunches from adding duplicates.
+        let marker = "seededReminders@\(today.timeIntervalSince1970)"
+        guard !UserDefaults.standard.bool(forKey: marker) else { return }
+        UserDefaults.standard.set(true, forKey: marker)
+        for sample in sampleReminders {
+            guard let day = Calendar.current.date(byAdding: .day, value: sample.dayOffset, to: today),
+                  let done = Calendar.current.date(bySettingHour: sample.hour, minute: sample.minute, second: 0, of: day),
+                  done <= .now else { continue }
+            let reminder = EKReminder(eventStore: store)
+            reminder.calendar = list
+            reminder.title = sample.title
+            reminder.completionDate = done
+            try? store.save(reminder, commit: false)
+        }
+        try? store.commit()
     }
 
     static func removeSampleDataIfRequested() async {

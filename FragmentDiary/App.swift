@@ -3,6 +3,7 @@ import WidgetKit
 
 @main
 struct FragmentDiaryApp: App {
+    @UIApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
     @State private var store = JournalStore()
     @State private var folderStore = FolderStore()
     @State private var lock = AppLock()

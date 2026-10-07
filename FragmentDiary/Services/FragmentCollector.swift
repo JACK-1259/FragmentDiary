@@ -6,11 +6,15 @@ enum PermissionState {
     case granted, limited, notDetermined, denied
 }
 
-/// Builds a day's fragments from the photo library and calendar. Everything is read on-device; nothing is copied out.
+/// Builds a day's fragments from the photo library, calendar and finished reminders. Everything is read on-device; nothing is copied out.
 @Observable
 final class FragmentCollector {
     private(set) var photoStatus = PHPhotoLibrary.authorizationStatus(for: .readWrite)
     private(set) var calendarStatus = EKEventStore.authorizationStatus(for: .event)
+    private(set) var remindersStatus = EKEventStore.authorizationStatus(for: .reminder)
+    /// Reminders can only be fetched asynchronously, so the past week's finished ones are cached and
+    /// folded into the synchronous `collect`. Views watch this to refresh once a fetch lands.
+    private(set) var finishedReminders: [Fragment] = []
 
     @ObservationIgnored private var eventStore = EKEventStore()
 
@@ -35,14 +39,24 @@ final class FragmentCollector {
         }
     }
 
+    var remindersState: PermissionState {
+        switch remindersStatus {
+        case .fullAccess: .granted
+        case .notDetermined: .notDetermined
+        default: .denied
+        }
+    }
+
     var canReadPhotos: Bool { photoState == .granted || photoState == .limited }
 
     func refreshStatus() {
         photoStatus = PHPhotoLibrary.authorizationStatus(for: .readWrite)
         let newCalendarStatus = EKEventStore.authorizationStatus(for: .event)
-        if newCalendarStatus != calendarStatus {
+        let newRemindersStatus = EKEventStore.authorizationStatus(for: .reminder)
+        if newCalendarStatus != calendarStatus || newRemindersStatus != remindersStatus {
             eventStore = EKEventStore()
             calendarStatus = newCalendarStatus
+            remindersStatus = newRemindersStatus
         }
     }
 
@@ -56,8 +70,52 @@ final class FragmentCollector {
         calendarStatus = EKEventStore.authorizationStatus(for: .event)
     }
 
+    func requestReminders() async {
+        _ = try? await EKEventStore().requestFullAccessToReminders()
+        eventStore = EKEventStore()
+        remindersStatus = EKEventStore.authorizationStatus(for: .reminder)
+        await refreshReminders()
+    }
+
+    /// Loads reminders completed in the past week (the backfill window) into the cache.
+    func refreshReminders(now: Date = .now) async {
+        guard remindersState == .granted else {
+            if !finishedReminders.isEmpty { finishedReminders = [] }
+            return
+        }
+        let today = Calendar.current.startOfDay(for: now)
+        let start = Calendar.current.date(byAdding: .day, value: -7, to: today) ?? today
+        let predicate = eventStore.predicateForCompletedReminders(withCompletionDateStarting: start, ending: now, calendars: nil)
+        let fetched = await Self.fetch(predicate, in: eventStore)
+        if fetched != finishedReminders { finishedReminders = fetched }
+    }
+
+    /// EventKit calls back on its own queue; only plain values cross back.
+    private nonisolated static func fetch(_ predicate: NSPredicate, in store: EKEventStore) async -> [Fragment] {
+        await withCheckedContinuation { continuation in
+            store.fetchReminders(matching: predicate) { reminders in
+                let fragments = (reminders ?? []).compactMap { reminder -> Fragment? in
+                    guard let done = reminder.completionDate else { return nil }
+                    return Fragment(
+                        sourceID: "reminder:\(reminder.calendarItemIdentifier)",
+                        kind: .reminder,
+                        start: done,
+                        title: reminder.title
+                    )
+                }
+                continuation.resume(returning: fragments.sorted { $0.start < $1.start })
+            }
+        }
+    }
+
     func collect(on day: Date, now: Date = .now) -> [Fragment] {
-        (photoFragments(on: day) + eventFragments(on: day, now: now)).sorted { $0.start < $1.start }
+        let reminders = finishedReminders.filter { Calendar.current.isDate($0.start, inSameDayAs: day) && $0.start <= now }
+        return (photoFragments(on: day) + eventFragments(on: day, now: now) + reminders).sorted { $0.start < $1.start }
+    }
+
+    /// The events and finished reminders of a day, as questions.
+    func questions(on day: Date, now: Date = .now) -> [Fragment] {
+        collect(on: day, now: now).filter(\.kind.isQuestion)
     }
 
     private func dayBounds(_ day: Date) -> (start: Date, end: Date) {

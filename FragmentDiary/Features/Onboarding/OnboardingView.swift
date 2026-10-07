@@ -10,7 +10,7 @@ struct OnboardingView: View {
     @State private var step = 0
     @State private var isWorking = false
 
-    private let primaryTitles = ["시작하기", "사진 허용하기", "캘린더 허용하기", "알림 받기", "조각일기 시작하기"]
+    private let primaryTitles = ["시작하기", "사진 허용하기", "캘린더·미리 알림 허용하기", "알림 받기", "조각일기 시작하기"]
     private let secondaryTitles: [String?] = [nil, "나중에", "나중에", "괜찮아요", nil]
 
     var body: some View {
@@ -76,15 +76,15 @@ struct OnboardingView: View {
             }
         case 2:
             OnboardingPage(
-                title: "지나간 일정이\n하루의 뼈대가 돼요",
-                message: "이미 지난 일정만 보여드려요. 앞으로의 계획은 일기에 섞이지 않아요."
+                title: "지나간 일정과 끝낸 일이\n질문이 돼요",
+                message: "‘민지랑 점심’, 어땠어요? 처럼 물어볼게요. 버튼 한 번이나 한 줄로 답하면 돼요. 이미 지난 일정과 끝낸 할 일만 가져와요."
             ) {
                 SymbolBadge(systemName: "calendar")
             }
         case 3:
             OnboardingPage(
                 title: "하루 끝에\n살짝 알려드릴게요",
-                message: "그날 모인 조각 수에 맞춰 알려드려요. 이미 기록한 날엔 조용히 있을게요."
+                message: "오늘 있었던 일정과 끝낸 일을 알려드려요. 잠금 화면에는 일정 이름 없이 개수만 보여요. 이미 기록한 날엔 조용히 있을게요."
             ) {
                 SymbolBadge(systemName: "bell")
             } bottom: {
@@ -128,7 +128,9 @@ struct OnboardingView: View {
         defer { isWorking = false }
         switch step {
         case 1: await collector.requestPhotos()
-        case 2: await collector.requestCalendar()
+        case 2:
+            await collector.requestCalendar()
+            await collector.requestReminders()
         case 3: reminderEnabled = await ReminderScheduler.requestAuthorization()
         case primaryTitles.count - 1:
             onFinish()

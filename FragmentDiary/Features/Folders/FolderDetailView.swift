@@ -214,6 +214,8 @@ private struct PostCard: View {
                         EventSummary(fragment: fragment.asFragment)
                     case .note:
                         EmptyView()
+                    case .reminder:
+                        QuestionAnswerView(fragment: fragment.asFragment)
                     case .drawing:
                         if let id = fragment.attachmentIDs.first {
                             NotebookPage(day: fragment.start, weather: fragment.weather, text: fragment.caption) {

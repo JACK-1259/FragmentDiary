@@ -46,12 +46,15 @@ final class DraftModel: Identifiable {
             if let index = items.firstIndex(where: { $0.id == fragment.sourceID }) {
                 var refreshed = fragment
                 refreshed.caption = items[index].fragment.caption
+                refreshed.reaction = items[index].fragment.reaction
                 // Decorations belong to the user, not the collector; keep them for photos still in the moment.
                 refreshed.decorations = items[index].fragment.decorations?.filter { refreshed.assetIDs.contains($0.key) }
                 if refreshed.decorations?.isEmpty == true { refreshed.decorations = nil }
                 items[index].fragment = refreshed
             } else {
-                items.append(Item(fragment: fragment, included: existing == nil && preselectCollected, isNew: existing != nil))
+                // Questions join the diary only once answered; everything else follows the preselect rule.
+                let included = !fragment.kind.isQuestion && existing == nil && preselectCollected
+                items.append(Item(fragment: fragment, included: included, isNew: existing != nil))
             }
         }
         items.sort { $0.fragment.start < $1.fragment.start }
@@ -68,6 +71,27 @@ final class DraftModel: Identifiable {
         let fragment = Fragment(sourceID: "manual:\(UUID().uuidString)", kind: .photos, start: start, assetIDs: assetIDs)
         items.append(Item(fragment: fragment, included: true, isNew: false))
         items.sort { $0.fragment.start < $1.fragment.start }
+    }
+
+    var questionIDs: [String] {
+        items.filter { $0.fragment.kind.isQuestion }.map(\.id)
+    }
+
+    var answeredQuestionCount: Int {
+        items.filter { $0.fragment.kind.isQuestion && $0.included }.count
+    }
+
+    /// Answering puts a question into the diary; clearing the answer takes it out again.
+    func syncInclusion(of id: String) {
+        guard let index = items.firstIndex(where: { $0.id == id }), items[index].fragment.kind.isQuestion else { return }
+        items[index].included = items[index].fragment.isAnswered
+    }
+
+    func dropAnswer(_ id: String) {
+        guard let index = items.firstIndex(where: { $0.id == id }) else { return }
+        items[index].fragment.reaction = nil
+        items[index].fragment.caption = ""
+        items[index].included = false
     }
 
     func remove(_ id: String) {
@@ -97,8 +121,8 @@ final class DraftModel: Identifiable {
             chosen = items.filter(\.included).map(\.fragment)
         case .oneLine:
             // A drawing page is its own record of the day, so the one-line mode keeps it alongside the cover.
-            let drawings = items.filter { $0.included && $0.fragment.kind == .drawing }.map(\.fragment)
-            chosen = (showCover ? [coverItem?.fragment].compactMap { $0 } : []) + drawings
+            let kept = items.filter { $0.included && ($0.fragment.kind == .drawing || $0.fragment.kind.isQuestion) }.map(\.fragment)
+            chosen = ((showCover ? [coverItem?.fragment].compactMap { $0 } : []) + kept).sorted { $0.start < $1.start }
         }
         let fragments = chosen.compactMap { fragment -> Fragment? in
             var fragment = fragment

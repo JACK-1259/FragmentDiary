@@ -18,7 +18,14 @@ struct TodayView: View {
     var body: some View {
         Group {
             if let entry = store.entry(on: .now), !isEditing {
-                CompletedTodayView(entry: entry, newCount: newFragmentCount(for: entry)) {
+                CompletedTodayView(
+                    entry: entry,
+                    newCount: newFragments(for: entry).filter { !$0.kind.isQuestion }.count,
+                    questionCount: newFragments(for: entry).filter(\.kind.isQuestion).count
+                ) {
+                    startEditing(entry)
+                } onAnswer: {
+                    NotificationRouter.shared.openQuestions = true
                     startEditing(entry)
                 } accessory: {
                     missedDayBanner
@@ -28,7 +35,8 @@ struct TodayView: View {
                     draft: draft,
                     saveTitle: isEditing ? "수정 완료" : "오늘 기록 완성",
                     onSave: save,
-                    onCancel: isEditing ? { cancelEditing() } : nil
+                    onCancel: isEditing ? { cancelEditing() } : nil,
+                    opensQuestionsFromNotification: true
                 ) {
                     if !isEditing { missedDayBanner }
                 }
@@ -37,10 +45,16 @@ struct TodayView: View {
             }
         }
         .sensoryFeedback(.success, trigger: savedTick)
-        .task { refresh() }
-        .onChange(of: scenePhase) { _, phase in
-            if phase == .active { refresh() }
+        .task {
+            refresh()
+            await collector.refreshReminders()
         }
+        .onChange(of: scenePhase) { _, phase in
+            guard phase == .active else { return }
+            refresh()
+            Task { await collector.refreshReminders() }
+        }
+        .onChange(of: collector.finishedReminders) { refresh() }
         .onChange(of: store.entries) { refresh() }
         .onChange(of: collector.photoStatus) { refresh() }
         .onChange(of: collector.calendarStatus) { refresh() }
@@ -103,15 +117,15 @@ struct TodayView: View {
         }
         missedDay = findMissedDay()
 
-        let count = collected.count
-        WidgetPublisher.publish(fragmentCount: count, store: store)
-        Task { await ReminderScheduler.reschedule(todayFragmentCount: count) }
+        WidgetPublisher.publish(fragmentCount: collected.count, store: store)
+        let today = collected
+        Task { await ReminderScheduler.reschedule(today: today) }
     }
 
-    private func newFragmentCount(for entry: DiaryEntry) -> Int {
-        guard !entry.quick else { return 0 }
+    /// Collected since the entry was saved: new photos, plus questions that haven't been answered yet.
+    private func newFragments(for entry: DiaryEntry) -> [Fragment] {
         let saved = Set(entry.fragments.map(\.sourceID))
-        return collected.filter { !saved.contains($0.sourceID) }.count
+        return collected.filter { !saved.contains($0.sourceID) && (!entry.quick || $0.kind.isQuestion) }
     }
 
     private func startEditing(_ entry: DiaryEntry) {
@@ -144,7 +158,9 @@ struct TodayView: View {
 private struct CompletedTodayView<Accessory: View>: View {
     let entry: DiaryEntry
     let newCount: Int
+    let questionCount: Int
     let onEdit: () -> Void
+    let onAnswer: () -> Void
     @ViewBuilder var accessory: Accessory
 
     var body: some View {
@@ -152,6 +168,21 @@ private struct CompletedTodayView<Accessory: View>: View {
             VStack(alignment: .leading, spacing: 24) {
                 DayHeader(day: entry.day, subtitle: "오늘의 기록이 완성됐어요")
                 accessory
+                if questionCount > 0 {
+                    Button(action: onAnswer) {
+                        HStack(spacing: 8) {
+                            Image(systemName: "bubble.left.and.text.bubble.right")
+                            Text("아직 답하지 않은 질문 \(questionCount)개")
+                            Spacer()
+                            Text("답하기").fontWeight(.semibold)
+                        }
+                        .font(.subheadline)
+                        .foregroundStyle(.tint)
+                        .padding(14)
+                        .background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(.tint.opacity(0.12)))
+                    }
+                    .buttonStyle(.plain)
+                }
                 if newCount > 0 {
                     Button(action: onEdit) {
                         HStack(spacing: 8) {

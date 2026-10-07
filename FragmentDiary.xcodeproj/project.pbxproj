@@ -278,7 +278,8 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = "조각일기";
-				INFOPLIST_KEY_NSCalendarsFullAccessUsageDescription = "오늘 있었던 일정을 일기의 조각으로 보여드려요. 캘린더 정보는 기기 밖으로 나가지 않아요.";
+				INFOPLIST_KEY_NSCalendarsFullAccessUsageDescription = "오늘 있었던 일정을 \"어땠어요?\" 질문으로 바꿔 한 줄 일기를 도와드려요. 캘린더 정보는 기기 밖으로 나가지 않아요.";
+				INFOPLIST_KEY_NSRemindersFullAccessUsageDescription = "오늘 끝낸 할 일을 질문으로 바꿔 한 줄 일기를 도와드려요. 미리 알림 정보는 기기 밖으로 나가지 않아요.";
 				INFOPLIST_KEY_NSFaceIDUsageDescription = "일기를 나만 볼 수 있도록 Face ID로 잠가요.";
 				INFOPLIST_KEY_NSPhotoLibraryUsageDescription = "오늘 찍은 사진을 모아 일기의 조각으로 보여드려요. 사진은 기기 밖으로 나가지 않아요.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
@@ -313,7 +314,8 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = "조각일기";
-				INFOPLIST_KEY_NSCalendarsFullAccessUsageDescription = "오늘 있었던 일정을 일기의 조각으로 보여드려요. 캘린더 정보는 기기 밖으로 나가지 않아요.";
+				INFOPLIST_KEY_NSCalendarsFullAccessUsageDescription = "오늘 있었던 일정을 \"어땠어요?\" 질문으로 바꿔 한 줄 일기를 도와드려요. 캘린더 정보는 기기 밖으로 나가지 않아요.";
+				INFOPLIST_KEY_NSRemindersFullAccessUsageDescription = "오늘 끝낸 할 일을 질문으로 바꿔 한 줄 일기를 도와드려요. 미리 알림 정보는 기기 밖으로 나가지 않아요.";
 				INFOPLIST_KEY_NSFaceIDUsageDescription = "일기를 나만 볼 수 있도록 Face ID로 잠가요.";
 				INFOPLIST_KEY_NSPhotoLibraryUsageDescription = "오늘 찍은 사진을 모아 일기의 조각으로 보여드려요. 사진은 기기 밖으로 나가지 않아요.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;

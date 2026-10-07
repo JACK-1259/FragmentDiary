@@ -41,7 +41,10 @@ nonisolated enum PhotoRef: Hashable, Sendable {
 }
 
 nonisolated enum FragmentKind: String, Codable, Sendable {
-    case photos, event, note, drawing
+    case photos, event, note, drawing, reminder
+
+    /// Calendar events and finished reminders are asked about rather than shown as-is.
+    var isQuestion: Bool { self == .event || self == .reminder }
 }
 
 nonisolated enum Weather: String, Codable, CaseIterable, Identifiable, Sendable {
@@ -91,8 +94,12 @@ nonisolated struct Fragment: Codable, Hashable, Identifiable, Sendable {
     var weather: Weather?
     /// Photos the user decorated, keyed by library asset ID. The value is a sealed attachment that replaces the original on display.
     var decorations: [String: UUID]?
+    /// A one-tap answer to a question card, e.g. "😌 후련해".
+    var reaction: String?
 
     var id: String { sourceID }
+
+    var isAnswered: Bool { reaction != nil || !caption.trimmed.isEmpty }
 
     var photos: [PhotoRef] {
         assetIDs.map { assetID in decorations?[assetID].map(PhotoRef.journal) ?? .asset(assetID) }
@@ -115,8 +122,11 @@ nonisolated struct Fragment: Codable, Hashable, Identifiable, Sendable {
             return caption
         case .drawing:
             base = ["그림일기", weather.map { "날씨 \($0.label)" }].compactMap { $0 }.joined(separator: " · ")
+        case .reminder:
+            base = "끝낸 일: \(title ?? "")"
         }
-        return caption.isEmpty ? base : "\(base) — \(caption)"
+        let answer = [reaction, caption.isEmpty ? nil : caption].compactMap { $0 }.joined(separator: " ")
+        return answer.isEmpty ? base : "\(base) — \(answer)"
     }
 }
 

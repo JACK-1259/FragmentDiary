@@ -43,6 +43,7 @@ private struct FragmentReadView: View {
         VStack(alignment: .leading, spacing: 10) {
             switch fragment.kind {
             case .photos: PhotoCollage(photos: fragment.photos, height: 150)
+            case .event where fragment.isAnswered, .reminder: QuestionAnswerView(fragment: fragment)
             case .event: EventSummary(fragment: fragment)
             case .note: EmptyView()
             case .drawing: DrawingPageView(fragment: fragment, day: fragment.start)

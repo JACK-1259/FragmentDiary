@@ -9,6 +9,7 @@ struct SettingsView: View {
     @AppStorage(ReminderSettings.enabledKey) private var reminderEnabled = false
     @AppStorage(ReminderSettings.minutesKey) private var reminderMinutes = ReminderSettings.defaultMinutes
     @AppStorage(LocalIdentity.nameKey) private var displayName = ""
+    @AppStorage(ReminderSettings.showsTitlesKey) private var showsTitles = false
     @State private var confirmErase = false
     @State private var notificationsDenied = false
     @State private var errorText: String?
@@ -47,21 +48,28 @@ struct SettingsView: View {
                         PermissionRow(title: "캘린더", systemImage: "calendar", state: collector.calendarState) {
                             await collector.requestCalendar()
                         }
+                        PermissionRow(title: "미리 알림", systemImage: "checklist", state: collector.remindersState) {
+                            await collector.requestReminders()
+                        }
                     } header: {
                         Text("조각 모으기")
                     } footer: {
-                        Text("사진과 일정은 기기 안에서만 읽어요. 스크린샷과 아직 시작하지 않은 일정은 제외돼요.")
+                        Text("사진, 일정, 끝낸 할 일은 기기 안에서만 읽어요. 일정과 끝낸 일은 \"어땠어요?\" 질문으로 바뀌어요. 스크린샷과 아직 시작하지 않은 일정은 제외돼요.")
                     }
 
                     Section {
                         Toggle("저녁 알림", isOn: $reminderEnabled)
                         if reminderEnabled {
                             DatePicker("시간", selection: reminderTime, displayedComponents: .hourAndMinute)
+                            Toggle("알림에 일정 이름 보이기", isOn: $showsTitles)
                         }
                     } header: {
                         Text("알림")
                     } footer: {
-                        Text("그날 모인 조각 수에 맞춰 알려드려요. 이미 기록한 날엔 울리지 않아요.")
+                        Text(
+                            showsTitles
+                                ? "예: ‘민지랑 점심’, 어땠어요? 잠금 화면에서 다른 사람도 일정 이름을 볼 수 있어요."
+                                : "예: 오늘 일정 2개와 끝낸 일 1개가 있었어요. 이미 기록한 날엔 울리지 않아요.")
                     }
 
                     Section {
@@ -152,7 +160,7 @@ struct SettingsView: View {
     }
 
     private func rescheduleReminders() async {
-        await ReminderScheduler.reschedule(todayFragmentCount: collector.collect(on: .now).count)
+        await ReminderScheduler.reschedule(today: collector.collect(on: .now))
     }
 
     private func eraseAll() {

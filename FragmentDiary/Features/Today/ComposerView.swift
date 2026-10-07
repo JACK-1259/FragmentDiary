@@ -7,11 +7,14 @@ struct ComposerView<Accessory: View>: View {
     let saveTitle: String
     let onSave: (DiaryEntry) -> Void
     var onCancel: (() -> Void)?
+    /// Only the Today composer answers a tapped evening reminder by opening the questions.
+    var opensQuestionsFromNotification = false
     @ViewBuilder var accessory: Accessory
 
     @Environment(FragmentCollector.self) private var collector
     @State private var pickedPhotos: [PhotosPickerItem] = []
     @State private var appeared = false
+    @State private var showQuestions = false
 
     var body: some View {
         ScrollView {
@@ -24,6 +27,9 @@ struct ComposerView<Accessory: View>: View {
                 }
                 .pickerStyle(.segmented)
                 MoodPicker(selection: $draft.mood, day: draft.day)
+                if !draft.questionIDs.isEmpty {
+                    QuestionSummaryRow(draft: draft) { showQuestions = true }
+                }
                 switch draft.mode {
                 case .fragments: fragmentsSection
                 case .oneLine: oneLineSection
@@ -37,8 +43,17 @@ struct ComposerView<Accessory: View>: View {
         .scrollDismissesKeyboard(.interactively)
         .background(Color.paper)
         .safeAreaInset(edge: .bottom) { saveBar }
-        .onAppear { appeared = true }
+        .onAppear {
+            appeared = true
+            openQuestionsIfRequested()
+        }
+        .onChange(of: NotificationRouter.shared.openQuestions) { openQuestionsIfRequested() }
         .onChange(of: pickedPhotos) { _, items in addPicked(items) }
+        .sheet(isPresented: $showQuestions) {
+            QuestionDeckSheet(draft: draft) { showQuestions = false }
+                .presentationDetents([.large])
+                .presentationDragIndicator(.visible)
+        }
     }
 
     private var isToday: Bool { Calendar.current.isDateInToday(draft.day) }
@@ -53,12 +68,14 @@ struct ComposerView<Accessory: View>: View {
     }
 
     private var fragmentsSection: some View {
-        VStack(alignment: .leading, spacing: 0) {
+        // Questions live behind the summary row, so the timeline is only photos, notes and drawings.
+        let hasTimeline = draft.items.contains { !$0.fragment.kind.isQuestion }
+        return VStack(alignment: .leading, spacing: 0) {
             if draft.items.isEmpty {
                 EmptyFragmentsCard(isToday: Calendar.current.isDateInToday(draft.day)) { draft.mode = .oneLine }
                     .padding(.bottom, 20)
             }
-            ForEach($draft.items) { $item in
+            ForEach($draft.items.filter { !$0.wrappedValue.fragment.kind.isQuestion }) { $item in
                 let index = draft.items.firstIndex { $0.id == item.id } ?? 0
                 TimelineRow(label: DateText.timelineLabel(for: item.fragment)) {
                     FragmentCard(item: $item, onRemove: item.isRemovable ? { remove(item.id) } : nil)
@@ -68,7 +85,7 @@ struct ComposerView<Accessory: View>: View {
                 .animation(.spring(duration: 0.5).delay(Double(index) * 0.06), value: appeared)
             }
             addRow
-                .padding(.leading, draft.items.isEmpty ? 0 : 56)
+                .padding(.leading, hasTimeline ? 56 : 0)
                 .padding(.bottom, 28)
             VStack(alignment: .leading, spacing: 8) {
                 Text("더 남기고 싶은 말")
@@ -144,6 +161,12 @@ struct ComposerView<Accessory: View>: View {
         }
     }
 
+    private func openQuestionsIfRequested() {
+        guard opensQuestionsFromNotification, NotificationRouter.shared.openQuestions else { return }
+        NotificationRouter.shared.openQuestions = false
+        if !draft.questionIDs.isEmpty { showQuestions = true }
+    }
+
     private func addPicked(_ items: [PhotosPickerItem]) {
         let ids = items.compactMap(\.itemIdentifier)
         guard let first = ids.first else { return }
@@ -203,6 +226,8 @@ private struct FragmentCard: View {
             }
         case .drawing:
             DrawingFragmentPreview(fragment: item.fragment)
+        case .reminder:
+            QuestionAnswerView(fragment: item.fragment)
         case .event:
             EventSummary(fragment: item.fragment, isNew: item.isNew)
         case .note:
