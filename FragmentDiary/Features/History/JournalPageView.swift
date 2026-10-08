@@ -5,6 +5,10 @@ import SwiftUI
 struct JournalPageView: View {
     let entry: DiaryEntry
 
+    @Environment(JournalStore.self) private var store
+    @Environment(\.horizontalSizeClass) private var sizeClass
+    @AppStorage("pageResizeHintSeen") private var resizeHintSeen = false
+
     private static let ink = Color(rgb: 0x2A2420)
     private static let muted = Color(rgb: 0x8A7F75)
     private static let rule = Color(rgb: 0xE6DCCD)
@@ -29,19 +33,21 @@ struct JournalPageView: View {
                 HandLine(time: nil, text: entry.note, large: true)
             }
             if !media.isEmpty {
-                LazyVGrid(columns: [GridItem(.adaptive(minimum: 140, maximum: 220), spacing: 14)], spacing: 18) {
+                PrintFlow(spacing: 16) {
                     ForEach(Array(media.enumerated()), id: \.element.id) { index, fragment in
-                        Group {
-                            if fragment.kind == .drawing {
-                                PinnedDrawing(fragment: fragment)
-                            } else {
-                                TapedPrints(photos: fragment.photos)
-                            }
+                        ResizablePrint(fragment: fragment, metrics: metrics, tilt: index.isMultiple(of: 2) ? -2 : 2) { scale in
+                            resizeHintSeen = true
+                            try? store.setPageScale(scale, for: fragment.id, in: entry.id)
                         }
-                        .rotationEffect(.degrees(index.isMultiple(of: 2) ? -2 : 2))
                     }
                 }
-                .padding(.vertical, 10)
+                .padding(.vertical, 12)
+                if !resizeHintSeen {
+                    Label("사진과 그림은 두 손가락으로 벌리거나 길게 눌러 크기를 바꿀 수 있어요", systemImage: "arrow.up.left.and.arrow.down.right")
+                        .font(.caption)
+                        .foregroundStyle(Self.muted)
+                        .padding(.bottom, 6)
+                }
             }
             ForEach(Array(lines.enumerated()), id: \.offset) { _, line in
                 HandLine(time: line.time, text: line.text)
@@ -65,6 +71,13 @@ struct JournalPageView: View {
         )
         .overlay(alignment: .leading) { SpiralRings() }
         .environment(\.colorScheme, .light)
+    }
+
+    /// iPad pages have room to spare, so prints start larger there.
+    private var metrics: PrintMetrics {
+        sizeClass == .regular
+            ? PrintMetrics(baseHeight: 190, maxHeight: 420, maxWidth: 600)
+            : PrintMetrics(baseHeight: 118, maxHeight: 260, maxWidth: 300)
     }
 
     /// Photos and drawings, stuck on in the order they happened.
@@ -124,29 +137,160 @@ private struct HandLine: View {
     }
 }
 
-/// A photo moment as small overlapping prints with a strip of washi tape.
-private struct TapedPrints: View {
-    let photos: [PhotoRef]
+struct PrintMetrics {
+    let baseHeight: CGFloat
+    let maxHeight: CGFloat
+    /// Wider than this and a print would run off the page, so its height is capped to fit.
+    let maxWidth: CGFloat
+    static let scaleRange: ClosedRange<Double> = 0.6...2.2
+
+    func height(for scale: Double, widthPerHeight: CGFloat) -> CGFloat {
+        min(baseHeight * CGFloat(scale), maxHeight, maxWidth / widthPerHeight)
+    }
+
+    /// Mirrors PhotoCollage's geometry: up to three tilted tiles, each overlapping the last.
+    static func collageWidthPerHeight(photoCount: Int) -> CGFloat {
+        let shown = CGFloat(min(max(photoCount, 1), 3))
+        return shown == 1 ? 1.3 : 0.78 * (1 + 0.62 * (shown - 1))
+    }
+}
+
+/// A photo or drawing on the page that the owner can pinch, or long-press, to make smaller or bigger.
+private struct ResizablePrint: View {
+    let fragment: Fragment
+    let metrics: PrintMetrics
+    let tilt: Double
+    let onResize: (Double) -> Void
+
+    @State private var pinch: CGFloat = 1
+
+    private var savedScale: Double { fragment.pageScale ?? 1 }
 
     var body: some View {
-        PhotoCollage(photos: photos, height: 118)
+        let live = min(max(savedScale * Double(pinch), PrintMetrics.scaleRange.lowerBound), PrintMetrics.scaleRange.upperBound)
+        Group {
+            if fragment.kind == .drawing {
+                PinnedDrawing(fragment: fragment, height: metrics.height(for: live, widthPerHeight: DrawingDiary.aspectRatio))
+            } else {
+                TapedPrints(photos: fragment.photos, height: metrics.height(for: live, widthPerHeight: PrintMetrics.collageWidthPerHeight(photoCount: fragment.assetIDs.count)))
+            }
+        }
+        .rotationEffect(.degrees(tilt))
+        .contentShape(Rectangle())
+        .gesture(
+            MagnifyGesture()
+                .onChanged { pinch = $0.magnification }
+                .onEnded { _ in
+                    onResize(live)
+                    pinch = 1
+                }
+        )
+        .contextMenu {
+            Section("크기") {
+                sizeButton("작게", 0.7)
+                sizeButton("보통", 1)
+                sizeButton("크게", 1.5)
+                sizeButton("아주 크게", 2.2)
+            }
+        }
+        .animation(.snappy, value: savedScale)
+        .accessibilityAdjustableAction { direction in
+            switch direction {
+            case .increment: onResize(min(savedScale + 0.3, PrintMetrics.scaleRange.upperBound))
+            case .decrement: onResize(max(savedScale - 0.3, PrintMetrics.scaleRange.lowerBound))
+            @unknown default: break
+            }
+        }
+    }
+
+    private func sizeButton(_ title: String, _ scale: Double) -> some View {
+        Button {
+            onResize(scale)
+        } label: {
+            if abs(savedScale - scale) < 0.05 {
+                Label(title, systemImage: "checkmark")
+            } else {
+                Text(title)
+            }
+        }
+    }
+}
+
+/// Lays prints out left to right, wrapping to a new row when one doesn't fit — each keeps its own size.
+private struct PrintFlow: Layout {
+    var spacing: CGFloat
+
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        let rows = arrange(width: proposal.width ?? .infinity, subviews: subviews)
+        let height = rows.map(\.height).reduce(0, +) + spacing * CGFloat(max(rows.count - 1, 0))
+        return CGSize(width: proposal.width ?? rows.map(\.width).max() ?? 0, height: height)
+    }
+
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        var y = bounds.minY
+        for row in arrange(width: bounds.width, subviews: subviews) {
+            // Rows are centered so a lone big print sits in the middle of the page.
+            var x = bounds.minX + (bounds.width - row.width) / 2
+            for index in row.indices {
+                let size = subviews[index].sizeThatFits(ProposedViewSize(width: bounds.width, height: nil))
+                subviews[index].place(at: CGPoint(x: x, y: y + (row.height - size.height) / 2), proposal: ProposedViewSize(size))
+                x += size.width + spacing
+            }
+            y += row.height + spacing
+        }
+    }
+
+    private struct Row {
+        var indices: [Int] = []
+        var width: CGFloat = 0
+        var height: CGFloat = 0
+    }
+
+    private func arrange(width: CGFloat, subviews: Subviews) -> [Row] {
+        var rows: [Row] = []
+        var current = Row()
+        for index in subviews.indices {
+            let size = subviews[index].sizeThatFits(ProposedViewSize(width: width, height: nil))
+            let needed = current.indices.isEmpty ? size.width : current.width + spacing + size.width
+            if needed > width, !current.indices.isEmpty {
+                rows.append(current)
+                current = Row()
+            }
+            current.width = current.indices.isEmpty ? size.width : current.width + spacing + size.width
+            current.height = max(current.height, size.height)
+            current.indices.append(index)
+        }
+        if !current.indices.isEmpty { rows.append(current) }
+        return rows
+    }
+}
+
+/// A photo moment as overlapping prints with a strip of washi tape.
+private struct TapedPrints: View {
+    let photos: [PhotoRef]
+    let height: CGFloat
+
+    var body: some View {
+        PhotoCollage(photos: photos, height: height)
             .overlay(alignment: .topLeading) {
                 WashiTape(rgb: 0xF3B8C8)
                     .rotationEffect(.degrees(-28))
                     .offset(x: -12, y: 2)
             }
-            .frame(maxWidth: .infinity)
+            .fixedSize()
     }
 }
 
-/// A drawing page stuck on like a small note card.
+/// A drawing page stuck on like a note card.
 private struct PinnedDrawing: View {
     let fragment: Fragment
+    let height: CGFloat
 
     var body: some View {
         if let id = fragment.drawingID {
             JournalAttachmentImage(attachmentID: id)
                 .aspectRatio(DrawingDiary.aspectRatio, contentMode: .fit)
+                .frame(width: (height - 8) * DrawingDiary.aspectRatio, height: height - 8)
                 .padding(4)
                 .background(Color.white)
                 .shadow(color: .black.opacity(0.15), radius: 5, y: 2)
@@ -161,8 +305,6 @@ private struct PinnedDrawing: View {
                             .padding(6)
                     }
                 }
-                .frame(maxHeight: 118)
-                .frame(maxWidth: .infinity)
                 .accessibilityLabel("그림")
         }
     }

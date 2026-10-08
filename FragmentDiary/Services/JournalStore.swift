@@ -115,6 +115,14 @@ final class JournalStore {
         }
     }
 
+    /// Remembers how big a photo or drawing should sit on the notebook page.
+    func setPageScale(_ scale: Double, for fragmentID: String, in entryID: UUID) throws {
+        guard var entry = entries.first(where: { $0.id == entryID }),
+              let index = entry.fragments.firstIndex(where: { $0.id == fragmentID }) else { return }
+        entry.fragments[index].pageScale = abs(scale - 1) < 0.01 ? nil : scale
+        try save(entry)
+    }
+
     func delete(_ entry: DiaryEntry) throws {
         let updated = entries.filter { $0.id != entry.id }
         try persist(updated)

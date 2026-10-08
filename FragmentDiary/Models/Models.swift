@@ -96,6 +96,8 @@ nonisolated struct Fragment: Codable, Hashable, Identifiable, Sendable {
     var decorations: [String: UUID]?
     /// A one-tap answer to a question card, e.g. "😌 후련해".
     var reaction: String?
+    /// How big the user made this photo or drawing on the notebook page (1 = default size).
+    var pageScale: Double?
 
     var id: String { sourceID }
 

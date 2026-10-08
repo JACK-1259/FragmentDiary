@@ -47,6 +47,7 @@ final class DraftModel: Identifiable {
                 var refreshed = fragment
                 refreshed.caption = items[index].fragment.caption
                 refreshed.reaction = items[index].fragment.reaction
+                refreshed.pageScale = items[index].fragment.pageScale
                 // Decorations belong to the user, not the collector; keep them for photos still in the moment.
                 refreshed.decorations = items[index].fragment.decorations?.filter { refreshed.assetIDs.contains($0.key) }
                 if refreshed.decorations?.isEmpty == true { refreshed.decorations = nil }
