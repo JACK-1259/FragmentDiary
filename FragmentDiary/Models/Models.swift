@@ -96,8 +96,15 @@ nonisolated struct Fragment: Codable, Hashable, Identifiable, Sendable {
     var decorations: [String: UUID]?
     /// A one-tap answer to a question card, e.g. "😌 후련해".
     var reaction: String?
-    /// How big the user made this photo or drawing on the notebook page (1 = default size).
+    /// Where the user placed this photo or drawing on the notebook page. Nil means "not moved yet":
+    /// the page lays it out automatically. Positions are the print's center as a fraction of the page width,
+    /// so a page arranged on iPhone looks the same on iPad.
+    var pageX: Double?
+    var pageY: Double?
+    /// How big the user made it (1 = default size).
     var pageScale: Double?
+    /// Stacking order when prints overlap; the last one touched sits on top.
+    var pageZ: Double?
 
     var id: String { sourceID }
 

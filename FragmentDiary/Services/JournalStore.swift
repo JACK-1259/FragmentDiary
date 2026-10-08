@@ -115,11 +115,26 @@ final class JournalStore {
         }
     }
 
-    /// Remembers how big a photo or drawing should sit on the notebook page.
-    func setPageScale(_ scale: Double, for fragmentID: String, in entryID: UUID) throws {
+    /// Remembers where and how big a photo or drawing sits on the notebook page, and puts it on top.
+    func placeOnPage(_ fragmentID: String, in entryID: UUID, x: Double, y: Double, scale: Double) throws {
         guard var entry = entries.first(where: { $0.id == entryID }),
               let index = entry.fragments.firstIndex(where: { $0.id == fragmentID }) else { return }
-        entry.fragments[index].pageScale = abs(scale - 1) < 0.01 ? nil : scale
+        entry.fragments[index].pageX = x
+        entry.fragments[index].pageY = y
+        entry.fragments[index].pageScale = scale
+        entry.fragments[index].pageZ = Date.now.timeIntervalSince1970
+        try save(entry)
+    }
+
+    /// Back to the automatic layout for every print on the page.
+    func resetPageLayout(of entryID: UUID) throws {
+        guard var entry = entries.first(where: { $0.id == entryID }) else { return }
+        for index in entry.fragments.indices {
+            entry.fragments[index].pageX = nil
+            entry.fragments[index].pageY = nil
+            entry.fragments[index].pageScale = nil
+            entry.fragments[index].pageZ = nil
+        }
         try save(entry)
     }
 

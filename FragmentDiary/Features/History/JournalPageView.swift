@@ -1,13 +1,13 @@
 import SwiftUI
 
-/// A saved day as one page of a spiral notebook: small prints and drawings stuck along the top,
-/// answers and notes written on the ruled lines below — compact enough to read the day at a glance.
+/// A saved day as one page of a spiral notebook: prints and drawings stuck on a scrapbook area the user
+/// can rearrange freely, answers and notes written on the ruled lines below.
 struct JournalPageView: View {
     let entry: DiaryEntry
 
     @Environment(JournalStore.self) private var store
     @Environment(\.horizontalSizeClass) private var sizeClass
-    @AppStorage("pageResizeHintSeen") private var resizeHintSeen = false
+    @AppStorage("pageArrangeHintSeen") private var arrangeHintSeen = false
 
     private static let ink = Color(rgb: 0x2A2420)
     private static let muted = Color(rgb: 0x8A7F75)
@@ -33,21 +33,24 @@ struct JournalPageView: View {
                 HandLine(time: nil, text: entry.note, large: true)
             }
             if !media.isEmpty {
-                PrintFlow(spacing: 16) {
-                    ForEach(Array(media.enumerated()), id: \.element.id) { index, fragment in
-                        ResizablePrint(fragment: fragment, metrics: metrics, tilt: index.isMultiple(of: 2) ? -2 : 2) { scale in
-                            resizeHintSeen = true
-                            try? store.setPageScale(scale, for: fragment.id, in: entry.id)
-                        }
-                    }
+                CollageBoard(media: media, baseHeight: baseHeight) { fragment, x, y, scale in
+                    arrangeHintSeen = true
+                    try? store.placeOnPage(fragment.id, in: entry.id, x: x, y: y, scale: scale)
                 }
                 .padding(.vertical, 12)
-                if !resizeHintSeen {
-                    Label("사진과 그림은 두 손가락으로 벌리거나 길게 눌러 크기를 바꿀 수 있어요", systemImage: "arrow.up.left.and.arrow.down.right")
-                        .font(.caption)
-                        .foregroundStyle(Self.muted)
-                        .padding(.bottom, 6)
+                HStack {
+                    if !arrangeHintSeen {
+                        Label("길게 눌러 끌면 옮겨지고, 두 손가락으로 크기를 바꿔요. 겹쳐도 돼요.", systemImage: "hand.draw")
+                    }
+                    Spacer(minLength: 0)
+                    if media.contains(where: { $0.pageX != nil }) {
+                        Button("자동 정렬") { try? store.resetPageLayout(of: entry.id) }
+                            .foregroundStyle(.tint)
+                    }
                 }
+                .font(.caption)
+                .foregroundStyle(Self.muted)
+                .padding(.bottom, 6)
             }
             ForEach(Array(lines.enumerated()), id: \.offset) { _, line in
                 HandLine(time: line.time, text: line.text)
@@ -74,11 +77,7 @@ struct JournalPageView: View {
     }
 
     /// iPad pages have room to spare, so prints start larger there.
-    private var metrics: PrintMetrics {
-        sizeClass == .regular
-            ? PrintMetrics(baseHeight: 190, maxHeight: 420, maxWidth: 600)
-            : PrintMetrics(baseHeight: 118, maxHeight: 260, maxWidth: 300)
-    }
+    private var baseHeight: CGFloat { sizeClass == .regular ? 190 : 118 }
 
     /// Photos and drawings, stuck on in the order they happened.
     private var media: [Fragment] {
@@ -137,131 +136,202 @@ private struct HandLine: View {
     }
 }
 
-struct PrintMetrics {
+/// The scrapbook area of the page. Prints the user hasn't touched flow in rows; once moved, a print keeps
+/// its own spot, size and stacking order, so photos and drawings can overlap like a real collage.
+private struct CollageBoard: View {
+    let media: [Fragment]
     let baseHeight: CGFloat
-    let maxHeight: CGFloat
-    /// Wider than this and a print would run off the page, so its height is capped to fit.
-    let maxWidth: CGFloat
-    static let scaleRange: ClosedRange<Double> = 0.6...2.2
+    let onPlace: (Fragment, Double, Double, Double) -> Void
 
-    func height(for scale: Double, widthPerHeight: CGFloat) -> CGFloat {
-        min(baseHeight * CGFloat(scale), maxHeight, maxWidth / widthPerHeight)
+    @State private var width: CGFloat = 0
+
+    struct Placed: Identifiable {
+        let fragment: Fragment
+        let index: Int
+        let center: CGPoint
+        let scale: Double
+        var id: String { fragment.id }
     }
 
-    /// Mirrors PhotoCollage's geometry: up to three tilted tiles, each overlapping the last.
-    static func collageWidthPerHeight(photoCount: Int) -> CGFloat {
-        let shown = CGFloat(min(max(photoCount, 1), 3))
-        return shown == 1 ? 1.3 : 0.78 * (1 + 0.62 * (shown - 1))
+    var body: some View {
+        let placed = width > 0 ? layout(width: width) : []
+        let height = placed.map { $0.center.y + PrintGeometry.size(of: $0.fragment, height: printHeight($0.fragment, $0.scale)).height / 2 }.max() ?? baseHeight
+        ZStack(alignment: .topLeading) {
+            ForEach(placed.sorted { ($0.fragment.pageZ ?? Double($0.index)) < ($1.fragment.pageZ ?? Double($1.index)) }) { item in
+                CollagePrint(
+                    fragment: item.fragment,
+                    center: item.center,
+                    scale: item.scale,
+                    tilt: item.index.isMultiple(of: 2) ? -2 : 2,
+                    boardWidth: width,
+                    height: { scale in printHeight(item.fragment, scale) }
+                ) { center, scale in
+                    onPlace(item.fragment, center.x / width, center.y / width, scale)
+                }
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .topLeading)
+        .frame(height: height + 10)
+        .background {
+            GeometryReader { proxy in
+                Color.clear
+                    .onAppear { width = proxy.size.width }
+                    .onChange(of: proxy.size.width) { _, new in width = new }
+            }
+        }
+    }
+
+    /// Free sizing, limited only so a print can't vanish or outgrow the page.
+    private func printHeight(_ fragment: Fragment, _ scale: Double) -> CGFloat {
+        let wanted = baseHeight * CGFloat(scale)
+        let widest = width / PrintGeometry.widthPerHeight(fragment)
+        return min(max(wanted, 48), max(widest, 48))
+    }
+
+    /// Untouched prints flow left to right in centered rows; moved ones keep their stored spot.
+    private func layout(width: CGFloat) -> [Placed] {
+        let spacing: CGFloat = 16
+        var result: [Placed] = []
+        var row: [(Int, CGSize)] = []
+        var y: CGFloat = 0
+
+        func flush() {
+            guard !row.isEmpty else { return }
+            let rowWidth = row.map(\.1.width).reduce(0, +) + spacing * CGFloat(row.count - 1)
+            let rowHeight = row.map(\.1.height).max() ?? 0
+            var x = (width - rowWidth) / 2
+            for (index, size) in row {
+                let fragment = media[index]
+                result.append(Placed(fragment: fragment, index: index, center: CGPoint(x: x + size.width / 2, y: y + rowHeight / 2), scale: fragment.pageScale ?? 1))
+                x += size.width + spacing
+            }
+            y += rowHeight + spacing
+            row = []
+        }
+
+        for (index, fragment) in media.enumerated() where fragment.pageX == nil {
+            let size = PrintGeometry.size(of: fragment, height: printHeight(fragment, fragment.pageScale ?? 1))
+            let rowWidth = row.map(\.1.width).reduce(0, +) + spacing * CGFloat(row.count)
+            if rowWidth + size.width > width { flush() }
+            row.append((index, size))
+        }
+        flush()
+
+        for (index, fragment) in media.enumerated() {
+            if let x = fragment.pageX, let y = fragment.pageY {
+                result.append(Placed(fragment: fragment, index: index, center: CGPoint(x: x * width, y: y * width), scale: fragment.pageScale ?? 1))
+            }
+        }
+        return result
     }
 }
 
-/// A photo or drawing on the page that the owner can pinch, or long-press, to make smaller or bigger.
-private struct ResizablePrint: View {
+/// One print on the board: hold and drag to move it, pinch to resize it freely.
+private struct CollagePrint: View {
     let fragment: Fragment
-    let metrics: PrintMetrics
+    let center: CGPoint
+    let scale: Double
     let tilt: Double
-    let onResize: (Double) -> Void
+    let boardWidth: CGFloat
+    let height: (Double) -> CGFloat
+    let onPlace: (CGPoint, Double) -> Void
 
+    @State private var drag: CGSize = .zero
     @State private var pinch: CGFloat = 1
+    @State private var lifted = false
 
-    private var savedScale: Double { fragment.pageScale ?? 1 }
+    private var liveScale: Double { min(max(scale * Double(pinch), 0.4), 4) }
 
     var body: some View {
-        let live = min(max(savedScale * Double(pinch), PrintMetrics.scaleRange.lowerBound), PrintMetrics.scaleRange.upperBound)
+        let printHeight = height(liveScale)
+        let size = PrintGeometry.size(of: fragment, height: printHeight)
         Group {
             if fragment.kind == .drawing {
-                PinnedDrawing(fragment: fragment, height: metrics.height(for: live, widthPerHeight: DrawingDiary.aspectRatio))
+                PinnedDrawing(fragment: fragment, height: printHeight)
             } else {
-                TapedPrints(photos: fragment.photos, height: metrics.height(for: live, widthPerHeight: PrintMetrics.collageWidthPerHeight(photoCount: fragment.assetIDs.count)))
+                TapedPrints(photos: fragment.photos, height: printHeight)
             }
         }
+        .frame(width: size.width, height: size.height)
         .rotationEffect(.degrees(tilt))
+        .scaleEffect(lifted ? 1.04 : 1)
+        .shadow(color: .black.opacity(lifted ? 0.22 : 0), radius: 14, y: 8)
         .contentShape(Rectangle())
-        .gesture(
-            MagnifyGesture()
-                .onChanged { pinch = $0.magnification }
-                .onEnded { _ in
-                    onResize(live)
-                    pinch = 1
-                }
-        )
-        .contextMenu {
-            Section("크기") {
-                sizeButton("작게", 0.7)
-                sizeButton("보통", 1)
-                sizeButton("크게", 1.5)
-                sizeButton("아주 크게", 2.2)
-            }
-        }
-        .animation(.snappy, value: savedScale)
+        .position(x: liveX(width: size.width), y: max(center.y + drag.height, size.height / 2))
+        .gesture(move.simultaneously(with: resize))
+        .zIndex(lifted || pinch != 1 ? 1 : 0)
+        .animation(.snappy(duration: 0.2), value: lifted)
+        .sensoryFeedback(.impact(weight: .light), trigger: lifted) { _, new in new }
+        .accessibilityElement(children: .combine)
         .accessibilityAdjustableAction { direction in
             switch direction {
-            case .increment: onResize(min(savedScale + 0.3, PrintMetrics.scaleRange.upperBound))
-            case .decrement: onResize(max(savedScale - 0.3, PrintMetrics.scaleRange.lowerBound))
+            case .increment: commit(scale: min(scale + 0.25, 4))
+            case .decrement: commit(scale: max(scale - 0.25, 0.4))
             @unknown default: break
             }
         }
     }
 
-    private func sizeButton(_ title: String, _ scale: Double) -> some View {
-        Button {
-            onResize(scale)
-        } label: {
-            if abs(savedScale - scale) < 0.05 {
-                Label(title, systemImage: "checkmark")
-            } else {
-                Text(title)
+    /// Holding first keeps a plain swipe free to scroll the page.
+    private var move: some Gesture {
+        LongPressGesture(minimumDuration: 0.25)
+            .sequenced(before: DragGesture(minimumDistance: 0, coordinateSpace: .local))
+            .onChanged { value in
+                if case .second(true, let dragValue) = value {
+                    lifted = true
+                    drag = dragValue?.translation ?? .zero
+                }
             }
-        }
+            .onEnded { value in
+                if case .second(true, let dragValue) = value {
+                    let moved = dragValue?.translation ?? .zero
+                    lifted = false
+                    commit(scale: liveScale, offset: moved)
+                    drag = .zero
+                } else {
+                    lifted = false
+                }
+            }
+    }
+
+    private var resize: some Gesture {
+        MagnifyGesture()
+            .onChanged { pinch = $0.magnification }
+            .onEnded { _ in
+                commit(scale: liveScale)
+                pinch = 1
+            }
+    }
+
+    private func liveX(width: CGFloat) -> CGFloat {
+        guard width < boardWidth else { return boardWidth / 2 }
+        return min(max(center.x + drag.width, width / 2), boardWidth - width / 2)
+    }
+
+    private func commit(scale: Double, offset: CGSize = .zero) {
+        let size = PrintGeometry.size(of: fragment, height: height(scale))
+        // Keep the print on the paper so it never covers the binding or spills off the page.
+        let x = size.width >= boardWidth
+            ? boardWidth / 2
+            : min(max(center.x + offset.width, size.width / 2), boardWidth - size.width / 2)
+        let y = max(center.y + offset.height, size.height / 2)
+        onPlace(CGPoint(x: x, y: y), scale)
     }
 }
 
-/// Lays prints out left to right, wrapping to a new row when one doesn't fit — each keeps its own size.
-private struct PrintFlow: Layout {
-    var spacing: CGFloat
-
-    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
-        let rows = arrange(width: proposal.width ?? .infinity, subviews: subviews)
-        let height = rows.map(\.height).reduce(0, +) + spacing * CGFloat(max(rows.count - 1, 0))
-        return CGSize(width: proposal.width ?? rows.map(\.width).max() ?? 0, height: height)
+enum PrintGeometry {
+    /// Mirrors PhotoCollage's geometry: up to three tilted tiles, each overlapping the last.
+    static func widthPerHeight(_ fragment: Fragment) -> CGFloat {
+        if fragment.kind == .drawing { return DrawingDiary.aspectRatio }
+        let shown = CGFloat(min(max(fragment.assetIDs.count, 1), 3))
+        return shown == 1 ? 1.3 : 0.78 * (1 + 0.62 * (shown - 1))
     }
 
-    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
-        var y = bounds.minY
-        for row in arrange(width: bounds.width, subviews: subviews) {
-            // Rows are centered so a lone big print sits in the middle of the page.
-            var x = bounds.minX + (bounds.width - row.width) / 2
-            for index in row.indices {
-                let size = subviews[index].sizeThatFits(ProposedViewSize(width: bounds.width, height: nil))
-                subviews[index].place(at: CGPoint(x: x, y: y + (row.height - size.height) / 2), proposal: ProposedViewSize(size))
-                x += size.width + spacing
-            }
-            y += row.height + spacing
+    static func size(of fragment: Fragment, height: CGFloat) -> CGSize {
+        if fragment.kind == .drawing {
+            return CGSize(width: (height - 8) * DrawingDiary.aspectRatio + 8, height: height)
         }
-    }
-
-    private struct Row {
-        var indices: [Int] = []
-        var width: CGFloat = 0
-        var height: CGFloat = 0
-    }
-
-    private func arrange(width: CGFloat, subviews: Subviews) -> [Row] {
-        var rows: [Row] = []
-        var current = Row()
-        for index in subviews.indices {
-            let size = subviews[index].sizeThatFits(ProposedViewSize(width: width, height: nil))
-            let needed = current.indices.isEmpty ? size.width : current.width + spacing + size.width
-            if needed > width, !current.indices.isEmpty {
-                rows.append(current)
-                current = Row()
-            }
-            current.width = current.indices.isEmpty ? size.width : current.width + spacing + size.width
-            current.height = max(current.height, size.height)
-            current.indices.append(index)
-        }
-        if !current.indices.isEmpty { rows.append(current) }
-        return rows
+        return CGSize(width: (height - 16) * widthPerHeight(fragment) + 4, height: height)
     }
 }
 
