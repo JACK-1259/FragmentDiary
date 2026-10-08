@@ -83,7 +83,7 @@ struct RootView: View {
 
 struct MainTabView: View {
     private enum MainTab {
-        case today, drawing, history, together, settings
+        case today, history, together, settings
     }
 
     @State private var selection = MainTab.today
@@ -93,9 +93,6 @@ struct MainTabView: View {
             TodayView()
                 .tabItem { Label("오늘", systemImage: "square.stack") }
                 .tag(MainTab.today)
-            DrawingTabView()
-                .tabItem { Label("그림", systemImage: "scribble.variable") }
-                .tag(MainTab.drawing)
             HistoryView()
                 .tabItem { Label("기록", systemImage: "book.closed") }
                 .tag(MainTab.history)

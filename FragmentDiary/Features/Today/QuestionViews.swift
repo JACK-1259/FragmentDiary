@@ -86,10 +86,13 @@ struct QuestionDeckSheet: View {
             }
 
             HStack {
-                Button(index == 0 ? "건너뛰기" : "이전") {
-                    if index == 0 { go(1) } else { go(-1) }
+                if index > 0 {
+                    Button("이전") { go(-1) }
+                        .foregroundStyle(Color.inkMuted)
+                } else if ids.count > 1 {
+                    Button("건너뛰기") { go(1) }
+                        .foregroundStyle(Color.inkMuted)
                 }
-                .foregroundStyle(Color.inkMuted)
                 Spacer()
                 if index < ids.count - 1 {
                     Button("다음") { go(1) }

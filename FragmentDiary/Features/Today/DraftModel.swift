@@ -13,7 +13,7 @@ final class DraftModel: Identifiable {
         var isNew: Bool
 
         var id: String { fragment.sourceID }
-        var isRemovable: Bool { fragment.kind == .note || fragment.sourceID.hasPrefix("manual:") }
+        var isRemovable: Bool { fragment.kind == .note || fragment.kind == .drawing || fragment.sourceID.hasPrefix("manual:") }
     }
 
     let id = UUID()
@@ -92,6 +92,17 @@ final class DraftModel: Identifiable {
         items[index].fragment.reaction = nil
         items[index].fragment.caption = ""
         items[index].included = false
+    }
+
+    /// A finished drawing page: replaces the one being edited, or joins the timeline as a new fragment.
+    func upsertDrawing(_ fragment: Fragment) {
+        if let index = items.firstIndex(where: { $0.id == fragment.sourceID }) {
+            items[index].fragment = fragment
+            items[index].included = true
+        } else {
+            items.append(Item(fragment: fragment, included: true, isNew: false))
+            items.sort { $0.fragment.start < $1.fragment.start }
+        }
     }
 
     func remove(_ id: String) {

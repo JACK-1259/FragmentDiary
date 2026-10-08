@@ -20,7 +20,7 @@ struct EntryDetailView: View {
                 ScrollView {
                     VStack(alignment: .leading, spacing: 24) {
                         DayHeader(day: entry.day)
-                        EntryContentView(entry: entry)
+                        JournalPageView(entry: entry)
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(.horizontal, 20)

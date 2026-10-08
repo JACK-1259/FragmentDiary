@@ -2,10 +2,12 @@ import PencilKit
 import SwiftUI
 
 /// Draw the day on a notebook page, pick the weather and write a few words in the squares.
+/// The page goes back to the composer as a drawing fragment; the composer decides when the entry is saved.
 struct DrawingEditorView: View {
     let day: Date
     let existing: Fragment?
-    let onDone: () -> Void
+    let onSave: (Fragment) -> Void
+    let onCancel: () -> Void
 
     @Environment(JournalStore.self) private var store
     @Environment(\.horizontalSizeClass) private var sizeClass
@@ -20,10 +22,11 @@ struct DrawingEditorView: View {
     private let initialDrawing: PKDrawing
     private let initialStickers: [Sticker]
 
-    init(day: Date, existing: Fragment?, layers: DecorationLayers?, onDone: @escaping () -> Void) {
+    init(day: Date, existing: Fragment?, layers: DecorationLayers?, onSave: @escaping (Fragment) -> Void, onCancel: @escaping () -> Void) {
         self.day = day
         self.existing = existing
-        self.onDone = onDone
+        self.onSave = onSave
+        self.onCancel = onCancel
         let session = DecorationSession(layers: layers, aspectRatio: DrawingDiary.aspectRatio)
         _session = State(initialValue: session)
         initialDrawing = session.drawing
@@ -73,16 +76,16 @@ struct DrawingEditorView: View {
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("취소") {
-                        if hasChanges { confirmDiscard = true } else { onDone() }
+                        if hasChanges { confirmDiscard = true } else { onCancel() }
                     }
                 }
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("저장", action: save)
+                    Button("완료", action: save)
                         .disabled(session.isEmpty && text.trimmed.isEmpty)
                 }
             }
             .confirmationDialog("그린 내용을 버릴까요?", isPresented: $confirmDiscard, titleVisibility: .visible) {
-                Button("버리기", role: .destructive, action: onDone)
+                Button("버리기", role: .destructive, action: onCancel)
             }
             .alert("저장하지 못했어요", isPresented: Binding(get: { errorText != nil }, set: { if !$0 { errorText = nil } })) {
                 Button("확인", role: .cancel) {}
@@ -146,8 +149,15 @@ struct DrawingEditorView: View {
         let image = DecorationRenderer.render(base: nil, paper: UIColor(rgb: DrawingDiary.paperRGB), layers: session.layers, outputWidth: 1600)
         do {
             try store.saveAttachment(id, image: image, layers: session.layers)
-            try store.saveDrawing(on: day, drawingID: id, caption: text.trimmed, weather: weather)
-            onDone()
+            var fragment = existing ?? Fragment(
+                sourceID: "drawing:\(UUID().uuidString)",
+                kind: .drawing,
+                start: Calendar.current.isDateInToday(day) ? .now : day.addingTimeInterval(20 * 3600)
+            )
+            fragment.drawingID = id
+            fragment.caption = text.trimmed
+            fragment.weather = weather
+            onSave(fragment)
         } catch {
             errorText = error.localizedDescription
         }

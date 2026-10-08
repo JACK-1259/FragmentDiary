@@ -134,8 +134,8 @@ struct FolderDetailView: View {
 
     private func startCompose() {
         // Today's drawing page is offered too, unchecked like everything else.
-        let drawing = store.entry(on: .now)?.drawing.map { [$0] } ?? []
-        composeDraft = DraftModel(day: .now, existing: nil, collected: collector.collect(on: .now) + drawing, preselectCollected: false)
+        let drawings = store.entry(on: .now)?.drawings ?? []
+        composeDraft = DraftModel(day: .now, existing: nil, collected: collector.collect(on: .now) + drawings, preselectCollected: false)
     }
 
     private func deletePost(_ post: SharedPost) {

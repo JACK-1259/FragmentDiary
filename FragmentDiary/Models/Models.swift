@@ -147,7 +147,7 @@ nonisolated struct DiaryEntry: Codable, Hashable, Identifiable, Sendable {
         fragments.compactMap { $0.drawingID.map(PhotoRef.journal) } + fragments.flatMap(\.photos)
     }
 
-    var drawing: Fragment? { fragments.first { $0.kind == .drawing } }
+    var drawings: [Fragment] { fragments.filter { $0.kind == .drawing } }
 
     var attachmentIDs: Set<UUID> { Set(fragments.flatMap(\.attachmentIDs)) }
 

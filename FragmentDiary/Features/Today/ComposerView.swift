@@ -15,6 +15,8 @@ struct ComposerView<Accessory: View>: View {
     @State private var pickedPhotos: [PhotosPickerItem] = []
     @State private var appeared = false
     @State private var showQuestions = false
+    @State private var drawingTarget: DrawingTarget?
+    @Environment(JournalStore.self) private var store
 
     var body: some View {
         ScrollView {
@@ -49,6 +51,18 @@ struct ComposerView<Accessory: View>: View {
         }
         .onChange(of: NotificationRouter.shared.openQuestions) { openQuestionsIfRequested() }
         .onChange(of: pickedPhotos) { _, items in addPicked(items) }
+        .fullScreenCover(item: $drawingTarget) { target in
+            DrawingEditorView(
+                day: draft.day,
+                existing: target.fragment,
+                layers: target.fragment?.drawingID.flatMap(store.layers)
+            ) { fragment in
+                withAnimation(.snappy) { draft.upsertDrawing(fragment) }
+                drawingTarget = nil
+            } onCancel: {
+                drawingTarget = nil
+            }
+        }
         .sheet(isPresented: $showQuestions) {
             QuestionDeckSheet(draft: draft) { showQuestions = false }
                 .presentationDetents([.large])
@@ -78,7 +92,9 @@ struct ComposerView<Accessory: View>: View {
             ForEach($draft.items.filter { !$0.wrappedValue.fragment.kind.isQuestion }) { $item in
                 let index = draft.items.firstIndex { $0.id == item.id } ?? 0
                 TimelineRow(label: DateText.timelineLabel(for: item.fragment)) {
-                    FragmentCard(item: $item, onRemove: item.isRemovable ? { remove(item.id) } : nil)
+                    FragmentCard(item: $item, onRemove: item.isRemovable ? { remove(item.id) } : nil) {
+                        drawingTarget = DrawingTarget(fragment: item.fragment)
+                    }
                 }
                 .opacity(appeared ? 1 : 0)
                 .offset(y: appeared ? 0 : 14)
@@ -87,6 +103,7 @@ struct ComposerView<Accessory: View>: View {
             addRow
                 .padding(.leading, hasTimeline ? 56 : 0)
                 .padding(.bottom, 28)
+                .animation(.snappy, value: hasTimeline)
             VStack(alignment: .leading, spacing: 8) {
                 Text("더 남기고 싶은 말")
                     .font(.footnote.weight(.medium))
@@ -99,20 +116,51 @@ struct ComposerView<Accessory: View>: View {
         }
     }
 
+    /// One row when it fits; on narrow screens the chips wrap so none gets cut off.
     private var addRow: some View {
-        HStack(spacing: 10) {
-            Button {
-                withAnimation(.snappy) { draft.addNote() }
-            } label: {
-                Label("메모 조각", systemImage: "text.quote")
-            }
-            if collector.canReadPhotos {
-                PhotosPicker(selection: $pickedPhotos, maxSelectionCount: 12, matching: .images, photoLibrary: .shared()) {
-                    Label("사진 더하기", systemImage: "photo.badge.plus")
+        ViewThatFits(in: .horizontal) {
+            HStack(spacing: 8) { addButtons }
+            VStack(alignment: .leading, spacing: 8) {
+                HStack(spacing: 8) {
+                    noteButton
+                    photoButton
                 }
+                drawButton
             }
         }
         .buttonStyle(ChipButtonStyle())
+    }
+
+    @ViewBuilder
+    private var addButtons: some View {
+        noteButton
+        photoButton
+        drawButton
+    }
+
+    private var noteButton: some View {
+        Button {
+            withAnimation(.snappy) { draft.addNote() }
+        } label: {
+            Label("메모 조각", systemImage: "text.quote")
+        }
+    }
+
+    @ViewBuilder
+    private var photoButton: some View {
+        if collector.canReadPhotos {
+            PhotosPicker(selection: $pickedPhotos, maxSelectionCount: 12, matching: .images, photoLibrary: .shared()) {
+                Label("사진 더하기", systemImage: "photo.badge.plus")
+            }
+        }
+    }
+
+    private var drawButton: some View {
+        Button {
+            drawingTarget = DrawingTarget(fragment: nil)
+        } label: {
+            Label("그림 그리기", systemImage: "scribble.variable")
+        }
     }
 
     private var oneLineSection: some View {
@@ -180,9 +228,15 @@ struct ComposerView<Accessory: View>: View {
     }
 }
 
+private struct DrawingTarget: Identifiable {
+    let fragment: Fragment?
+    var id: String { fragment?.sourceID ?? "new" }
+}
+
 private struct FragmentCard: View {
     @Binding var item: DraftModel.Item
     var onRemove: (() -> Void)?
+    var onOpenDrawing: () -> Void = {}
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -225,7 +279,15 @@ private struct FragmentCard: View {
                 .foregroundStyle(Color.inkMuted)
             }
         case .drawing:
-            DrawingFragmentPreview(fragment: item.fragment)
+            Button(action: onOpenDrawing) {
+                VStack(alignment: .leading, spacing: 6) {
+                    DrawingFragmentPreview(fragment: item.fragment)
+                    Text("눌러서 이어 그리기")
+                        .font(.caption)
+                        .foregroundStyle(Color.inkMuted)
+                }
+            }
+            .buttonStyle(.plain)
         case .reminder:
             QuestionAnswerView(fragment: item.fragment)
         case .event:

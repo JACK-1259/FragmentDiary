@@ -159,20 +159,6 @@ enum DrawingDiary {
     static var capacity: Int { columns * rows }
 }
 
-/// A saved drawing page, read-only.
-struct DrawingPageView: View {
-    let fragment: Fragment
-    let day: Date
-
-    var body: some View {
-        NotebookPage(day: day, weather: fragment.weather, text: fragment.caption) {
-            if let id = fragment.drawingID {
-                JournalAttachmentImage(attachmentID: id)
-            }
-        }
-    }
-}
-
 /// A sealed journal image shown whole (not cropped), used for drawing pages.
 struct JournalAttachmentImage: View {
     let attachmentID: UUID

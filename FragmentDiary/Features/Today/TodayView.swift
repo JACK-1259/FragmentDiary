@@ -198,7 +198,7 @@ private struct CompletedTodayView<Accessory: View>: View {
                     }
                     .buttonStyle(.plain)
                 }
-                EntryContentView(entry: entry)
+                JournalPageView(entry: entry)
                 Button("수정하기", action: onEdit)
                     .buttonStyle(SecondaryButtonStyle())
             }

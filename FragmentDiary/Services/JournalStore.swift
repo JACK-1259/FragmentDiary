@@ -115,31 +115,6 @@ final class JournalStore {
         }
     }
 
-    /// A drawing page joins that day's entry (or starts one), so drawing-only days count as written.
-    func saveDrawing(on day: Date, drawingID: UUID, caption: String, weather: Weather?) throws {
-        let calendar = Calendar.current
-        let start = calendar.startOfDay(for: day)
-        var entry = self.entry(on: start) ?? DiaryEntry(
-            id: UUID(), day: start, mood: nil, note: "", quick: false, fragments: [], createdAt: .now, updatedAt: .now
-        )
-        if let index = entry.fragments.firstIndex(where: { $0.kind == .drawing }) {
-            entry.fragments[index].drawingID = drawingID
-            entry.fragments[index].caption = caption
-            entry.fragments[index].weather = weather
-        } else {
-            let drawnAt = calendar.isDateInToday(start) ? Date.now : start.addingTimeInterval(20 * 3600)
-            entry.fragments.append(Fragment(
-                sourceID: "drawing:\(UUID().uuidString)", kind: .drawing, start: drawnAt, caption: caption, drawingID: drawingID, weather: weather
-            ))
-            entry.fragments.sort { $0.start < $1.start }
-        }
-        entry.updatedAt = .now
-        try save(entry)
-        if calendar.isDateInToday(start) {
-            UserDefaults.standard.set(start, forKey: ReminderSettings.lastEntryDayKey)
-        }
-    }
-
     func delete(_ entry: DiaryEntry) throws {
         let updated = entries.filter { $0.id != entry.id }
         try persist(updated)
