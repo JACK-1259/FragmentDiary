@@ -1,7 +1,7 @@
 import SwiftUI
 
-/// A saved day as one page of a spiral notebook: photos taped in as prints, answers and notes
-/// written on the ruled lines, drawings stuck on like notes — all in the order they happened.
+/// A saved day as one page of a spiral notebook: small prints and drawings stuck along the top,
+/// answers and notes written on the ruled lines below — compact enough to read the day at a glance.
 struct JournalPageView: View {
     let entry: DiaryEntry
 
@@ -28,17 +28,23 @@ struct JournalPageView: View {
             if entry.quick, !entry.note.isEmpty {
                 HandLine(time: nil, text: entry.note, large: true)
             }
-            ForEach(Array(blocks.enumerated()), id: \.offset) { index, block in
-                switch block {
-                case .photos(let fragment):
-                    TapedPrints(photos: fragment.photos, leading: index.isMultiple(of: 2))
-                        .padding(.vertical, 14)
-                case .drawing(let fragment):
-                    PinnedDrawing(fragment: fragment, leading: !index.isMultiple(of: 2))
-                        .padding(.vertical, 14)
-                case .line(let time, let text):
-                    HandLine(time: time, text: text)
+            if !media.isEmpty {
+                LazyVGrid(columns: [GridItem(.adaptive(minimum: 140, maximum: 220), spacing: 14)], spacing: 18) {
+                    ForEach(Array(media.enumerated()), id: \.element.id) { index, fragment in
+                        Group {
+                            if fragment.kind == .drawing {
+                                PinnedDrawing(fragment: fragment)
+                            } else {
+                                TapedPrints(photos: fragment.photos)
+                            }
+                        }
+                        .rotationEffect(.degrees(index.isMultiple(of: 2) ? -2 : 2))
+                    }
                 }
+                .padding(.vertical, 10)
+            }
+            ForEach(Array(lines.enumerated()), id: \.offset) { _, line in
+                HandLine(time: line.time, text: line.text)
             }
             if !entry.quick, !entry.note.isEmpty {
                 HandLine(time: nil, text: entry.note)
@@ -61,24 +67,20 @@ struct JournalPageView: View {
         .environment(\.colorScheme, .light)
     }
 
-    enum Block {
-        case photos(Fragment)
-        case drawing(Fragment)
-        case line(String?, String)
+    /// Photos and drawings, stuck on in the order they happened.
+    private var media: [Fragment] {
+        entry.fragments.filter { ($0.kind == .photos && !$0.assetIDs.isEmpty) || ($0.kind == .drawing && $0.drawingID != nil) }
     }
 
-    private var blocks: [Block] {
-        entry.fragments.flatMap { fragment -> [Block] in
+    /// Everything written: answers, notes and the captions of photos and drawings.
+    private var lines: [(time: String?, text: String)] {
+        entry.fragments.compactMap { fragment in
             let time = DateText.timelineLabel(for: fragment)
             switch fragment.kind {
-            case .photos:
-                return [.photos(fragment)] + (fragment.caption.isEmpty ? [] : [.line(time, fragment.caption)])
-            case .drawing:
-                return [.drawing(fragment)]
-            case .note:
-                return fragment.caption.isEmpty ? [] : [.line(time, fragment.caption)]
+            case .photos, .drawing, .note:
+                return fragment.caption.isEmpty ? nil : (time, fragment.caption)
             case .event, .reminder:
-                return [.line(time, Self.sentence(for: fragment))]
+                return (time, Self.sentence(for: fragment))
             }
         }
     }
@@ -122,58 +124,47 @@ private struct HandLine: View {
     }
 }
 
-/// Photos as prints with a strip of washi tape, sitting a little left or right like they were stuck in by hand.
+/// A photo moment as small overlapping prints with a strip of washi tape.
 private struct TapedPrints: View {
     let photos: [PhotoRef]
-    let leading: Bool
 
     var body: some View {
-        PhotoCollage(photos: photos, height: 190)
+        PhotoCollage(photos: photos, height: 118)
             .overlay(alignment: .topLeading) {
                 WashiTape(rgb: 0xF3B8C8)
                     .rotationEffect(.degrees(-28))
-                    .offset(x: -14, y: 2)
+                    .offset(x: -12, y: 2)
             }
-            .rotationEffect(.degrees(leading ? -1.5 : 1.5))
-            .frame(maxWidth: .infinity, alignment: leading ? .leading : .trailing)
+            .frame(maxWidth: .infinity)
     }
 }
 
-/// A drawing page stuck onto the notebook like a note card, with its caption written underneath.
+/// A drawing page stuck on like a small note card.
 private struct PinnedDrawing: View {
     let fragment: Fragment
-    let leading: Bool
 
     var body: some View {
-        VStack(alignment: leading ? .leading : .trailing, spacing: 8) {
-            if let id = fragment.drawingID {
-                JournalAttachmentImage(attachmentID: id)
-                    .aspectRatio(DrawingDiary.aspectRatio, contentMode: .fit)
-                    .padding(6)
-                    .background(Color.white)
-                    .shadow(color: .black.opacity(0.15), radius: 6, y: 3)
-                    .overlay(alignment: .top) {
-                        WashiTape(rgb: 0xB8D4EC).offset(y: -9)
+        if let id = fragment.drawingID {
+            JournalAttachmentImage(attachmentID: id)
+                .aspectRatio(DrawingDiary.aspectRatio, contentMode: .fit)
+                .padding(4)
+                .background(Color.white)
+                .shadow(color: .black.opacity(0.15), radius: 5, y: 2)
+                .overlay(alignment: .top) {
+                    WashiTape(rgb: 0xB8D4EC).scaleEffect(0.8).offset(y: -8)
+                }
+                .overlay(alignment: .bottomTrailing) {
+                    if let weather = fragment.weather {
+                        Image(systemName: weather.symbol)
+                            .font(.caption)
+                            .foregroundStyle(weather.color)
+                            .padding(6)
                     }
-                    .overlay(alignment: .bottomTrailing) {
-                        if let weather = fragment.weather {
-                            Image(systemName: weather.symbol)
-                                .foregroundStyle(weather.color)
-                                .padding(10)
-                        }
-                    }
-                    .frame(maxWidth: 280)
-                    .rotationEffect(.degrees(leading ? -2 : 2))
-                    .accessibilityLabel("그림")
-            }
-            if !fragment.caption.isEmpty {
-                Text(fragment.caption)
-                    .font(.system(size: 16, design: .serif))
-                    .foregroundStyle(Color(rgb: 0x3B3029))
-                    .padding(.top, 4)
-            }
+                }
+                .frame(maxHeight: 118)
+                .frame(maxWidth: .infinity)
+                .accessibilityLabel("그림")
         }
-        .frame(maxWidth: .infinity, alignment: leading ? .leading : .trailing)
     }
 }
 

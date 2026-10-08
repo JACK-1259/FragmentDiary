@@ -116,33 +116,21 @@ struct ComposerView<Accessory: View>: View {
         }
     }
 
-    /// One row when it fits; on narrow screens the chips wrap so none gets cut off.
+    /// Short labels so all three fit on one row, even beside the timeline on the smallest iPhone.
     private var addRow: some View {
-        ViewThatFits(in: .horizontal) {
-            HStack(spacing: 8) { addButtons }
-            VStack(alignment: .leading, spacing: 8) {
-                HStack(spacing: 8) {
-                    noteButton
-                    photoButton
-                }
-                drawButton
-            }
+        HStack(spacing: 8) {
+            noteButton
+            photoButton
+            drawButton
         }
         .buttonStyle(ChipButtonStyle())
-    }
-
-    @ViewBuilder
-    private var addButtons: some View {
-        noteButton
-        photoButton
-        drawButton
     }
 
     private var noteButton: some View {
         Button {
             withAnimation(.snappy) { draft.addNote() }
         } label: {
-            Label("메모 조각", systemImage: "text.quote")
+            Label("메모", systemImage: "text.quote")
         }
     }
 
@@ -150,7 +138,7 @@ struct ComposerView<Accessory: View>: View {
     private var photoButton: some View {
         if collector.canReadPhotos {
             PhotosPicker(selection: $pickedPhotos, maxSelectionCount: 12, matching: .images, photoLibrary: .shared()) {
-                Label("사진 더하기", systemImage: "photo.badge.plus")
+                Label("사진", systemImage: "photo.badge.plus")
             }
         }
     }
@@ -159,7 +147,7 @@ struct ComposerView<Accessory: View>: View {
         Button {
             drawingTarget = DrawingTarget(fragment: nil)
         } label: {
-            Label("그림 그리기", systemImage: "scribble.variable")
+            Label("그림", systemImage: "scribble.variable")
         }
     }
 
