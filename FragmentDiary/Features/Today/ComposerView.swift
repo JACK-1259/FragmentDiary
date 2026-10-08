@@ -85,6 +85,9 @@ struct ComposerView<Accessory: View>: View {
         // Questions live behind the summary row, so the timeline is only photos, notes and drawings.
         let hasTimeline = draft.items.contains { !$0.fragment.kind.isQuestion }
         return VStack(alignment: .leading, spacing: 0) {
+            // Adding a memo, photo or drawing sits above the timeline so it's visible without scrolling.
+            addRow
+                .padding(.bottom, 20)
             if draft.items.isEmpty {
                 EmptyFragmentsCard(isToday: Calendar.current.isDateInToday(draft.day)) { draft.mode = .oneLine }
                     .padding(.bottom, 20)
@@ -100,10 +103,7 @@ struct ComposerView<Accessory: View>: View {
                 .offset(y: appeared ? 0 : 14)
                 .animation(.spring(duration: 0.5).delay(Double(index) * 0.06), value: appeared)
             }
-            addRow
-                .padding(.leading, hasTimeline ? 56 : 0)
-                .padding(.bottom, 28)
-                .animation(.snappy, value: hasTimeline)
+            Spacer().frame(height: hasTimeline ? 12 : 0)
             VStack(alignment: .leading, spacing: 8) {
                 Text("더 남기고 싶은 말")
                     .font(.footnote.weight(.medium))

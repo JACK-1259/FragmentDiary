@@ -5,6 +5,8 @@ struct HistoryView: View {
     @State private var showBackfill = false
     @State private var path: [UUID] = []
     @State private var backfillTarget: BackfillTarget?
+    @State private var query = ""
+    @State private var scope = JournalSearch.Scope.all
 
     private var months: [(month: Date, entries: [DiaryEntry])] {
         let calendar = Calendar.current
@@ -21,6 +23,11 @@ struct HistoryView: View {
             ScrollView {
                 if store.entries.isEmpty {
                     emptyState
+                } else if !query.trimmed.isEmpty {
+                    SearchResultsView(query: query, entries: store.entries, scope: $scope)
+                        .padding(.horizontal, 20)
+                        .padding(.bottom, 32)
+                        .readableColumn()
                 } else {
                     LazyVStack(alignment: .leading, spacing: 12) {
                         MonthCalendarView(entries: store.entries) { entry in
@@ -49,6 +56,7 @@ struct HistoryView: View {
             }
             .background(Color.paper)
             .navigationTitle("기록")
+            .searchable(text: $query, placement: .navigationBarDrawer(displayMode: .always), prompt: "한 줄, 메모, 일정 찾기")
             .navigationDestination(for: UUID.self) { id in
                 EntryDetailView(entryID: id)
             }

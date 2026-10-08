@@ -11,6 +11,7 @@ struct TodayView: View {
     @State private var savedTick = 0
     @State private var missedDay: (day: Date, count: Int)?
     @State private var backfillTarget: BackfillTarget?
+    @State private var lookBackEntry: UUID?
     @AppStorage("backfillDismissedThrough") private var backfillDismissedThrough: Double = 0
 
     private static let backfillLookbackDays = 7
@@ -28,7 +29,7 @@ struct TodayView: View {
                     NotificationRouter.shared.openQuestions = true
                     startEditing(entry)
                 } accessory: {
-                    missedDayBanner
+                    topAccessories
                 }
             } else if let draft {
                 ComposerView(
@@ -38,7 +39,7 @@ struct TodayView: View {
                     onCancel: isEditing ? { cancelEditing() } : nil,
                     opensQuestionsFromNotification: true
                 ) {
-                    if !isEditing { missedDayBanner }
+                    if !isEditing { topAccessories }
                 }
             } else {
                 Color.paper.ignoresSafeArea()
@@ -58,6 +59,16 @@ struct TodayView: View {
         .onChange(of: store.entries) { refresh() }
         .onChange(of: collector.photoStatus) { refresh() }
         .onChange(of: collector.calendarStatus) { refresh() }
+        .sheet(item: Binding(get: { lookBackEntry.map(IdentifiedID.init) }, set: { lookBackEntry = $0?.id })) { target in
+            NavigationStack {
+                EntryDetailView(entryID: target.id)
+                    .toolbar {
+                        ToolbarItem(placement: .cancellationAction) {
+                            Button("닫기") { lookBackEntry = nil }
+                        }
+                    }
+            }
+        }
         .sheet(item: $backfillTarget) { target in
             BackfillComposer(day: target.day) { backfillTarget = nil }
         }
@@ -69,6 +80,14 @@ struct TodayView: View {
         } message: {
             Text(saveError ?? "")
         }
+    }
+
+    @ViewBuilder
+    private var topAccessories: some View {
+        if let match = LookBack.match(in: store) {
+            LookBackStrip(match: match) { lookBackEntry = match.entry.id }
+        }
+        missedDayBanner
     }
 
     @ViewBuilder
