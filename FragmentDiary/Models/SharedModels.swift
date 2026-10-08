@@ -22,9 +22,23 @@ nonisolated struct PostFragment: Codable, Hashable, Identifiable, Sendable {
     var caption: String
     var attachmentIDs: [UUID]
     var weather: Weather?
+    var reaction: String?
+    /// The author's arrangement on the post's notebook page (see `Fragment.pageX`).
+    var pageX: Double?
+    var pageY: Double?
+    var pageScale: Double?
+    var pageZ: Double?
 
     var asFragment: Fragment {
-        Fragment(sourceID: id.uuidString, kind: kind, start: start, end: end, title: title, place: place, caption: caption, weather: weather)
+        var fragment = Fragment(sourceID: id.uuidString, kind: kind, start: start, end: end, title: title, place: place, caption: caption, weather: weather)
+        fragment.reaction = reaction
+        return fragment
+    }
+
+    var pagePrint: PagePrint? {
+        guard (kind == .photos || kind == .drawing), !attachmentIDs.isEmpty else { return nil }
+        let images = kind == .drawing ? [PhotoRef.attachment(attachmentIDs[0])] : attachmentIDs.map(PhotoRef.attachment)
+        return PagePrint(id: id.uuidString, isDrawing: kind == .drawing, images: images, weather: weather, x: pageX, y: pageY, scale: pageScale, z: pageZ)
     }
 }
 

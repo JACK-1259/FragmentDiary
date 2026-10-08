@@ -29,7 +29,7 @@ struct FolderDetailView: View {
                                     .foregroundStyle(Color.inkMuted)
                                     .padding(.top, 4)
                                 ForEach(group.posts) { post in
-                                    PostCard(post: post, author: folder.member(post.authorID), isMine: post.authorID == LocalIdentity.id) {
+                                    PostCard(post: post, folderID: folder.id, author: folder.member(post.authorID), isMine: post.authorID == LocalIdentity.id) {
                                         deletePost(post)
                                     }
                                 }
@@ -156,87 +156,70 @@ struct FolderDetailView: View {
     }
 }
 
+/// A member's post as a notebook page, same as a journal day. Only the author can rearrange its prints.
 private struct PostCard: View {
     let post: SharedPost
+    let folderID: UUID
     let author: Member?
     let isMine: Bool
     let onDelete: () -> Void
 
+    @Environment(FolderStore.self) private var folderStore
     @State private var confirmDelete = false
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack(spacing: 10) {
-                MemberAvatar(name: author?.name ?? "?", color: author?.color ?? Color.inkMuted, size: 30)
-                VStack(alignment: .leading, spacing: 1) {
-                    Text(author.map { isMine ? "\($0.name) (나)" : $0.name } ?? "알 수 없음")
-                        .font(.subheadline.weight(.semibold))
-                        .foregroundStyle(Color.ink)
-                    Text(DateText.time(post.createdAt))
-                        .font(.caption)
-                        .foregroundStyle(Color.inkMuted)
-                }
-                Spacer(minLength: 0)
-                if let mood = post.mood {
-                    HStack(spacing: 5) {
-                        Circle().fill(mood.color).frame(width: 8, height: 8)
-                        Text(mood.label)
-                    }
-                    .font(.caption.weight(.medium))
-                    .foregroundStyle(Color.inkMuted)
-                }
-                if isMine {
-                    Menu {
-                        Button("삭제", systemImage: "trash", role: .destructive) { confirmDelete = true }
-                    } label: {
-                        Image(systemName: "ellipsis")
-                            .foregroundStyle(Color.inkMuted)
-                            .frame(width: 28, height: 28)
-                    }
-                    .accessibilityLabel("기록 메뉴")
-                }
-            }
-
-            if !post.note.isEmpty {
-                Text(post.note)
-                    .font(.body)
-                    .foregroundStyle(Color.ink)
-                    .lineSpacing(4)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-
-            ForEach(post.fragments) { fragment in
-                VStack(alignment: .leading, spacing: 8) {
-                    switch fragment.kind {
-                    case .photos:
-                        PhotoCollage(photos: fragment.attachmentIDs.map(PhotoRef.attachment), height: 140)
-                    case .event:
-                        EventSummary(fragment: fragment.asFragment)
-                    case .note:
-                        EmptyView()
-                    case .reminder:
-                        QuestionAnswerView(fragment: fragment.asFragment)
-                    case .drawing:
-                        if let id = fragment.attachmentIDs.first {
-                            NotebookPage(day: fragment.start, weather: fragment.weather, text: fragment.caption) {
-                                AttachmentThumbnail(attachmentID: id)
-                            }
-                        }
-                    }
-                    if !fragment.caption.isEmpty && fragment.kind != .drawing {
-                        Text(fragment.caption)
-                            .font(fragment.kind == .note ? .body : .subheadline)
-                            .foregroundStyle(Color.ink)
-                            .fixedSize(horizontal: false, vertical: true)
-                    }
-                }
-            }
+        ScrapbookPage(
+            prints: post.fragments.compactMap(\.pagePrint),
+            lines: post.fragments.compactMap(Self.line),
+            trailNote: post.note,
+            onPlace: isMine ? { id, x, y, scale in
+                try? folderStore.placeOnPage(id, post: post.id, in: folderID, x: x, y: y, scale: scale)
+            } : nil,
+            onReset: isMine ? { try? folderStore.resetPageLayout(post: post.id, in: folderID) } : nil
+        ) {
+            header
+                .padding(.bottom, 12)
         }
-        .padding(16)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .cardStyle()
         .confirmationDialog("이 기록을 폴더에서 삭제할까요?", isPresented: $confirmDelete, titleVisibility: .visible) {
             Button("삭제", role: .destructive, action: onDelete)
+        }
+    }
+
+    private var header: some View {
+        HStack(spacing: 10) {
+            MemberAvatar(name: author?.name ?? "?", color: author?.color ?? Color.inkMuted, size: 30)
+            VStack(alignment: .leading, spacing: 1) {
+                Text(author.map { isMine ? "\($0.name) (나)" : $0.name } ?? "알 수 없음")
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(Color(rgb: 0x2A2420))
+                Text(DateText.time(post.createdAt))
+                    .font(.caption)
+                    .foregroundStyle(Color(rgb: 0x8A7F75))
+            }
+            Spacer(minLength: 0)
+            if let mood = post.mood {
+                MoodChip(mood: mood, day: post.day)
+            }
+            if isMine {
+                Menu {
+                    Button("삭제", systemImage: "trash", role: .destructive) { confirmDelete = true }
+                } label: {
+                    Image(systemName: "ellipsis")
+                        .foregroundStyle(Color(rgb: 0x8A7F75))
+                        .frame(width: 28, height: 28)
+                }
+                .accessibilityLabel("기록 메뉴")
+            }
+        }
+    }
+
+    private static func line(_ fragment: PostFragment) -> PageLine? {
+        let time = DateText.timelineLabel(for: fragment.asFragment)
+        switch fragment.kind {
+        case .photos, .drawing, .note:
+            return fragment.caption.isEmpty ? nil : PageLine(time: time, text: fragment.caption)
+        case .event, .reminder:
+            return PageLine(time: time, text: JournalPageView.sentence(for: fragment.asFragment))
         }
     }
 }

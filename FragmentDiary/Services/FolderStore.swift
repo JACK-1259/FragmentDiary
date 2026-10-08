@@ -90,11 +90,41 @@ final class FolderStore {
                 place: fragment.place,
                 caption: fragment.caption,
                 attachmentIDs: attachmentIDs,
-                weather: fragment.weather
+                weather: fragment.weather,
+                reaction: fragment.reaction,
+                // The page arrangement the author made in their journal comes along with the post.
+                pageX: fragment.pageX,
+                pageY: fragment.pageY,
+                pageScale: fragment.pageScale,
+                pageZ: fragment.pageZ
             ))
         }
         let post = SharedPost(id: UUID(), authorID: author, day: entry.day, createdAt: .now, mood: entry.mood, note: entry.note, fragments: fragments)
         try update(folderID) { $0.posts.append(post) }
+    }
+
+    /// Moves or resizes one print on a post's page and brings it to the top. Only the author's posts are arranged.
+    func placeOnPage(_ fragmentID: String, post postID: UUID, in folderID: UUID, x: Double, y: Double, scale: Double) throws {
+        try update(folderID) { folder in
+            guard let p = folder.posts.firstIndex(where: { $0.id == postID }),
+                  let f = folder.posts[p].fragments.firstIndex(where: { $0.id.uuidString == fragmentID }) else { return }
+            folder.posts[p].fragments[f].pageX = x
+            folder.posts[p].fragments[f].pageY = y
+            folder.posts[p].fragments[f].pageScale = scale
+            folder.posts[p].fragments[f].pageZ = Date.now.timeIntervalSince1970
+        }
+    }
+
+    func resetPageLayout(post postID: UUID, in folderID: UUID) throws {
+        try update(folderID) { folder in
+            guard let p = folder.posts.firstIndex(where: { $0.id == postID }) else { return }
+            for f in folder.posts[p].fragments.indices {
+                folder.posts[p].fragments[f].pageX = nil
+                folder.posts[p].fragments[f].pageY = nil
+                folder.posts[p].fragments[f].pageScale = nil
+                folder.posts[p].fragments[f].pageZ = nil
+            }
+        }
     }
 
     func deletePost(_ postID: UUID, in folderID: UUID) throws {
