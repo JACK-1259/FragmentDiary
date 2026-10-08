@@ -8,12 +8,12 @@ nonisolated enum ThemePreset: String, CaseIterable, Identifiable, Sendable {
 
     var name: String {
         switch self {
-        case .terracotta: "테라코타"
-        case .sage: "세이지"
-        case .indigo: "인디고"
-        case .wine: "와인"
-        case .mustard: "머스타드"
-        case .ink: "먹"
+        case .terracotta: "벽돌색"
+        case .sage: "쑥색"
+        case .indigo: "쪽빛"
+        case .wine: "자주색"
+        case .mustard: "겨자색"
+        case .ink: "먹색"
         }
     }
 
