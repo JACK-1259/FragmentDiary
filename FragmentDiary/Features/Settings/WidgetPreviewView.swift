@@ -50,6 +50,8 @@ struct WidgetPreviewView: View {
         FragmentsWidgetView(entry: entry, previewFamily: family)
             // Approximates the system's Lock Screen vibrancy: default (uncolored) text renders white there, not black.
             .environment(\.colorScheme, dark ? .dark : .light)
+            // Home Screen widgets get the system's 16pt content margins; accessory families get none.
+            .padding(dark ? 0 : 16)
             .frame(width: size.width, height: size.height)
             .padding(dark ? 8 : 0)
             .background(dark ? Color.black : Color.paper)

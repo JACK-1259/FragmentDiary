@@ -21,7 +21,7 @@ struct FragmentsWidgetView: View {
         switch family {
         case .accessoryCircular: circular
         case .accessoryRectangular: rectangular
-        case .accessoryInline: Text(inlineText)
+        case .accessoryInline: Text(inlineText).lineLimit(1)
         case .systemMedium: medium
         default: small
         }
@@ -56,6 +56,8 @@ struct FragmentsWidgetView: View {
                 .font(.system(.subheadline, design: .serif, weight: .semibold))
                 .foregroundStyle(Color.ink)
         }
+        .lineLimit(1)
+        .minimumScaleFactor(0.8)
     }
 
     @ViewBuilder
@@ -74,6 +76,8 @@ struct FragmentsWidgetView: View {
                     .font(.caption.weight(.medium))
                     .foregroundStyle(Color.inkMuted)
             }
+            .lineLimit(1)
+            .minimumScaleFactor(0.7)
         }
     }
 
@@ -90,6 +94,7 @@ struct FragmentsWidgetView: View {
                 .font(.caption2)
                 .foregroundStyle(Color.inkMuted)
                 .lineLimit(1)
+                .minimumScaleFactor(0.7)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
     }
@@ -103,20 +108,27 @@ struct FragmentsWidgetView: View {
                 Text(statusText)
                     .font(.caption)
                     .foregroundStyle(Color.inkMuted)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.75)
             }
+            .layoutPriority(1)
             Spacer(minLength: 0)
             VStack(alignment: .trailing, spacing: 8) {
                 MiniNotebook(cover: .placing, scale: 1.6)
                     .padding(.top, 6)
                 Spacer(minLength: 0)
-                if let streakText {
-                    Text(streakText)
-                        .font(.caption.weight(.semibold))
-                        .foregroundStyle(accent)
+                Group {
+                    if let streakText {
+                        Text(streakText)
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(accent)
+                    }
+                    Text("일기 내용은 앱 안에만 있어요")
+                        .font(.caption2)
+                        .foregroundStyle(Color.inkMuted)
                 }
-                Text("일기 내용은 앱 안에만 있어요")
-                    .font(.caption2)
-                    .foregroundStyle(Color.inkMuted)
+                .lineLimit(1)
+                .minimumScaleFactor(0.75)
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -132,9 +144,12 @@ struct FragmentsWidgetView: View {
                 VStack(spacing: -2) {
                     Text(countText)
                         .font(.system(.title2, design: .serif, weight: .semibold))
+                        .minimumScaleFactor(0.6)
                     Text("조각")
                         .font(.system(size: 10, weight: .medium))
                 }
+                .lineLimit(1)
+                .padding(.horizontal, 6)
             }
         }
         .widgetAccentable()
@@ -151,6 +166,8 @@ struct FragmentsWidgetView: View {
                 .font(.caption)
                 .foregroundStyle(.secondary)
         }
+        .lineLimit(1)
+        .minimumScaleFactor(0.75)
         .frame(maxWidth: .infinity, alignment: .leading)
     }
 }
