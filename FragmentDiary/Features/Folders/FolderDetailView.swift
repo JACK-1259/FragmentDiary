@@ -216,9 +216,9 @@ private struct PostCard: View {
     private static func line(_ fragment: PostFragment) -> PageLine? {
         let time = DateText.timelineLabel(for: fragment.asFragment)
         switch fragment.kind {
-        case .drawing:
+        case .drawing, .note:
             return nil
-        case .photos, .note:
+        case .photos:
             return fragment.caption.isEmpty ? nil : PageLine(time: time, text: fragment.caption)
         case .event, .reminder:
             return PageLine(time: time, text: JournalPageView.sentence(for: fragment.asFragment))

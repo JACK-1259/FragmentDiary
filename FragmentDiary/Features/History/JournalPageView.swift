@@ -2,10 +2,15 @@ import SwiftUI
 
 /// One photo moment or drawing as it sits on a notebook page, wherever it came from (journal or shared folder).
 struct PagePrint: Identifiable {
+    enum Kind {
+        case photos, drawing, note
+    }
+
     let id: String
-    let isDrawing: Bool
-    /// The photos of a moment, or the single image of a drawing.
-    let images: [PhotoRef]
+    let kind: Kind
+    var isDrawing: Bool { kind == .drawing }
+    /// The photos of a moment, or the single image of a drawing; empty for a memo.
+    var images: [PhotoRef] = []
     /// A drawing page keeps its whole notebook frame: date, weather and the words in the squares.
     var day: Date = .now
     var weather: Weather?
@@ -141,11 +146,16 @@ struct JournalPageView: View {
         fragments.compactMap { fragment in
             switch fragment.kind {
             case .photos where !fragment.assetIDs.isEmpty:
-                PagePrint(id: fragment.id, isDrawing: false, images: fragment.photos, x: fragment.pageX, y: fragment.pageY, scale: fragment.pageScale, rotation: fragment.pageRotation, z: fragment.pageZ)
+                PagePrint(id: fragment.id, kind: .photos, images: fragment.photos, x: fragment.pageX, y: fragment.pageY, scale: fragment.pageScale, rotation: fragment.pageRotation, z: fragment.pageZ)
+            case .note where !fragment.caption.trimmed.isEmpty:
+                PagePrint(
+                    id: fragment.id, kind: .note, day: fragment.start, caption: fragment.caption,
+                    x: fragment.pageX, y: fragment.pageY, scale: fragment.pageScale, rotation: fragment.pageRotation, z: fragment.pageZ
+                )
             case .drawing:
                 fragment.drawingID.map {
                     PagePrint(
-                        id: fragment.id, isDrawing: true, images: [.journal($0)], day: fragment.start, weather: fragment.weather, caption: fragment.caption,
+                        id: fragment.id, kind: .drawing, images: [.journal($0)], day: fragment.start, weather: fragment.weather, caption: fragment.caption,
                         x: fragment.pageX, y: fragment.pageY, scale: fragment.pageScale, rotation: fragment.pageRotation, z: fragment.pageZ
                     )
                 }
@@ -159,10 +169,10 @@ struct JournalPageView: View {
         fragments.compactMap { fragment in
             let time = DateText.timelineLabel(for: fragment)
             switch fragment.kind {
-            // A drawing's words stay in its own squares, on the print.
-            case .drawing:
+            // A drawing's words stay in its own squares and a memo is its own sticky note, both on the board.
+            case .drawing, .note:
                 return nil
-            case .photos, .note:
+            case .photos:
                 return fragment.caption.isEmpty ? nil : PageLine(time: time, text: fragment.caption)
             case .event, .reminder:
                 return PageLine(time: time, text: sentence(for: fragment))
@@ -352,7 +362,9 @@ private struct CollagePrint: View {
         let printHeight = height(liveScale)
         let size = PrintGeometry.size(of: fragment, height: printHeight)
         Group {
-            if fragment.isDrawing, let image = fragment.images.first {
+            if fragment.kind == .note {
+                StickyNote(print: fragment, size: size)
+            } else if fragment.isDrawing, let image = fragment.images.first {
                 PinnedDrawing(print: fragment, image: image, size: size)
             } else {
                 TapedPrints(photos: fragment.images, height: printHeight)
@@ -447,6 +459,7 @@ enum PrintGeometry {
     /// Mirrors PhotoCollage's geometry: up to three tilted tiles, each overlapping the last.
     static func widthPerHeight(_ fragment: PagePrint) -> CGFloat {
         if fragment.isDrawing { return DrawingPrint.width / DrawingPrint.height }
+        if fragment.kind == .note { return 1 }
         let shown = CGFloat(min(max(fragment.images.count, 1), 3))
         return shown == 1 ? 1.3 : 0.78 * (1 + 0.62 * (shown - 1))
     }
@@ -459,7 +472,7 @@ enum PrintGeometry {
     }
 
     static func size(of fragment: PagePrint, height: CGFloat) -> CGSize {
-        if fragment.isDrawing {
+        if fragment.kind != .photos {
             return CGSize(width: height * widthPerHeight(fragment), height: height)
         }
         return CGSize(width: (height - 16) * widthPerHeight(fragment) + 4, height: height)
@@ -502,6 +515,50 @@ private struct PinnedDrawing: View {
         }
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(print.caption.isEmpty ? "그림일기" : "그림일기, \(print.caption)")
+    }
+}
+
+/// A memo stuck on the page as a square sticky note: words in handwriting-like serif, the time it was
+/// written at the bottom, a faint glue strip on top and a lifted corner. Laid out once at a fixed size and
+/// scaled, so the words keep their wrapping at any size.
+private struct StickyNote: View {
+    let print: PagePrint
+    let size: CGSize
+
+    private static let side: CGFloat = 200
+    private static let colors: [UInt32] = [0xFFF1A8, 0xFFD6E0, 0xD4F0D8, 0xD6E8FA, 0xFFE2C2]
+
+    var body: some View {
+        let paper = Color(rgb: Self.colors[Int(abs(stableAngle(for: print.id, maxDegrees: 1000))) % Self.colors.count])
+        VStack(alignment: .leading, spacing: 8) {
+            Text(print.caption)
+                .font(.system(size: 22, design: .serif))
+                .foregroundStyle(Color(rgb: 0x3B3029))
+                .lineSpacing(4)
+                .minimumScaleFactor(0.45)
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+            Text(DateText.time(print.day))
+                .font(.system(size: 12, weight: .medium).monospacedDigit())
+                .foregroundStyle(Color(rgb: 0x8A7F75))
+        }
+        .padding(.horizontal, 18)
+        .padding(.top, 26)
+        .padding(.bottom, 14)
+        .frame(width: Self.side, height: Self.side)
+        .background {
+            ZStack(alignment: .top) {
+                paper
+                // The glue strip: a touch darker band across the top.
+                Rectangle().fill(Color.black.opacity(0.04)).frame(height: 18)
+            }
+            .clipShape(UnevenRoundedRectangle(bottomTrailingRadius: 14))
+        }
+        .shadow(color: .black.opacity(0.10), radius: 1, y: 1)
+        .shadow(color: .black.opacity(0.14), radius: 8, x: 3, y: 6)
+        .scaleEffect(size.height / Self.side, anchor: .topLeading)
+        .frame(width: size.width, height: size.height, alignment: .topLeading)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("메모, \(print.caption)")
     }
 }
 

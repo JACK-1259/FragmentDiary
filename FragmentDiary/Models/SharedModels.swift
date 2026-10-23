@@ -37,12 +37,19 @@ nonisolated struct PostFragment: Codable, Hashable, Identifiable, Sendable {
     }
 
     var pagePrint: PagePrint? {
-        guard (kind == .photos || kind == .drawing), !attachmentIDs.isEmpty else { return nil }
-        let images = kind == .drawing ? [PhotoRef.attachment(attachmentIDs[0])] : attachmentIDs.map(PhotoRef.attachment)
-        return PagePrint(
-            id: id.uuidString, isDrawing: kind == .drawing, images: images, day: start, weather: weather, caption: kind == .drawing ? caption : "",
-            x: pageX, y: pageY, scale: pageScale, rotation: pageRotation, z: pageZ
-        )
+        switch kind {
+        case .note where !caption.trimmed.isEmpty:
+            return PagePrint(id: id.uuidString, kind: .note, day: start, caption: caption, x: pageX, y: pageY, scale: pageScale, rotation: pageRotation, z: pageZ)
+        case .photos, .drawing:
+            guard !attachmentIDs.isEmpty else { return nil }
+            let images = kind == .drawing ? [PhotoRef.attachment(attachmentIDs[0])] : attachmentIDs.map(PhotoRef.attachment)
+            return PagePrint(
+                id: id.uuidString, kind: kind == .drawing ? .drawing : .photos, images: images, day: start, weather: weather,
+                caption: kind == .drawing ? caption : "", x: pageX, y: pageY, scale: pageScale, rotation: pageRotation, z: pageZ
+            )
+        default:
+            return nil
+        }
     }
 }
 
