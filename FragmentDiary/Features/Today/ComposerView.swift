@@ -170,6 +170,16 @@ struct ComposerView<Accessory: View>: View {
                     }
                 }
             }
+            if !draft.keptInOneLine.isEmpty {
+                VStack(alignment: .leading, spacing: 10) {
+                    Text("함께 남는 조각 \(draft.keptInOneLine.count)개")
+                        .font(.subheadline.weight(.medium))
+                        .foregroundStyle(Color.ink)
+                    ForEach(draft.keptInOneLine) { item in
+                        KeptFragmentRow(fragment: item.fragment)
+                    }
+                }
+            }
             Label("바쁜 날엔 이것만으로 충분해요. 기록은 그대로 이어져요.", systemImage: "leaf")
                 .font(.footnote)
                 .foregroundStyle(Color.inkMuted)
@@ -213,6 +223,47 @@ struct ComposerView<Accessory: View>: View {
 
     private func remove(_ id: String) {
         withAnimation(.snappy) { draft.remove(id) }
+    }
+}
+
+/// A compact reminder, in the one-line mode, of something the user wrote or made that will be kept.
+private struct KeptFragmentRow: View {
+    let fragment: Fragment
+
+    var body: some View {
+        HStack(spacing: 10) {
+            Image(systemName: symbol)
+                .font(.subheadline)
+                .foregroundStyle(.tint)
+                .frame(width: 22)
+            Text(text)
+                .font(.subheadline)
+                .foregroundStyle(Color.ink)
+                .lineLimit(1)
+            Spacer(minLength: 0)
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 11)
+        .cardStyle(cornerRadius: 14)
+    }
+
+    private var symbol: String {
+        switch fragment.kind {
+        case .note: "text.quote"
+        case .drawing: "scribble.variable"
+        case .photos: "photo"
+        case .event: "calendar"
+        case .reminder: "checklist"
+        }
+    }
+
+    private var text: String {
+        switch fragment.kind {
+        case .note: fragment.caption
+        case .drawing: fragment.caption.isEmpty ? "그림일기" : "그림일기 · \(fragment.caption)"
+        case .photos: fragment.caption.isEmpty ? "사진 \(fragment.assetIDs.count)장" : fragment.caption
+        case .event, .reminder: JournalPageView.sentence(for: fragment)
+        }
     }
 }
 

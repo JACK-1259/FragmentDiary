@@ -220,6 +220,7 @@ private struct CollageBoard: View {
                     tilt: item.index.isMultiple(of: 2) ? -2 : 2,
                     boardWidth: width,
                     height: { scale in printHeight(item.fragment, scale) },
+                    scaleRange: scaleRange(item.fragment),
                     onPlace: onPlace.map { place in
                         { center, scale in place(item.fragment.id, center.x / width, center.y / width, scale) }
                     }
@@ -237,11 +238,19 @@ private struct CollageBoard: View {
         }
     }
 
+    private static let smallestHeight: CGFloat = 56
+
     /// Free sizing, limited only so a print can't vanish or outgrow the page.
     private func printHeight(_ fragment: PagePrint, _ scale: Double) -> CGFloat {
-        let wanted = baseHeight * CGFloat(scale)
-        let widest = width / PrintGeometry.widthPerHeight(fragment)
-        return min(max(wanted, 48), max(widest, 48))
+        let range = scaleRange(fragment)
+        return baseHeight * CGFloat(min(max(scale, range.lowerBound), range.upperBound))
+    }
+
+    /// The scales that actually change the print's size. Pinching is clamped to these, so there's no dead zone
+    /// where fingers move but the print doesn't (e.g. after over-stretching past the page width).
+    private func scaleRange(_ fragment: PagePrint) -> ClosedRange<Double> {
+        let widest = max((width - 4) / PrintGeometry.widthPerHeight(fragment) + 16, Self.smallestHeight)
+        return Double(Self.smallestHeight / baseHeight)...Double(widest / baseHeight)
     }
 
     /// Untouched prints flow left to right in centered rows; moved ones keep their stored spot.
@@ -290,13 +299,18 @@ private struct CollagePrint: View {
     let tilt: Double
     let boardWidth: CGFloat
     let height: (Double) -> CGFloat
+    let scaleRange: ClosedRange<Double>
     let onPlace: ((CGPoint, Double) -> Void)?
 
     @State private var drag: CGSize = .zero
     @State private var pinch: CGFloat = 1
     @State private var lifted = false
 
-    private var liveScale: Double { min(max(scale * Double(pinch), 0.4), 4) }
+    /// Starts from the size actually shown, so a pinch responds from its first movement.
+    private var liveScale: Double {
+        let start = min(max(scale, scaleRange.lowerBound), scaleRange.upperBound)
+        return min(max(start * Double(pinch), scaleRange.lowerBound), scaleRange.upperBound)
+    }
 
     var body: some View {
         let printHeight = height(liveScale)
@@ -312,7 +326,10 @@ private struct CollagePrint: View {
         .rotationEffect(.degrees(tilt))
         .scaleEffect(lifted ? 1.04 : 1)
         .shadow(color: .black.opacity(lifted ? 0.22 : 0), radius: 14, y: 8)
+        // A margin around small prints so both fingers of a pinch land on them.
+        .padding(18)
         .contentShape(Rectangle())
+        .padding(-18)
         .position(x: liveX(width: size.width), y: max(center.y + drag.height, size.height / 2))
         .gesture(move.simultaneously(with: resize), isEnabled: onPlace != nil)
         .zIndex(lifted || pinch != 1 ? 1 : 0)
@@ -322,8 +339,8 @@ private struct CollagePrint: View {
         .accessibilityAdjustableAction { direction in
             guard onPlace != nil else { return }
             switch direction {
-            case .increment: commit(scale: min(scale + 0.25, 4))
-            case .decrement: commit(scale: max(scale - 0.25, 0.4))
+            case .increment: commit(scale: min(liveScale + 0.25, scaleRange.upperBound))
+            case .decrement: commit(scale: max(liveScale - 0.25, scaleRange.lowerBound))
             @unknown default: break
             }
         }

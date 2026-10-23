@@ -115,6 +115,23 @@ final class DraftModel: Identifiable {
 
     var isEditingExisting: Bool { existing != nil }
 
+    /// What the user made by hand survives a switch to the one-line mode: written memos, drawings,
+    /// answered questions, and photos they captioned, decorated or added themselves. Only untouched,
+    /// automatically collected photos and events give way to the single cover.
+    var keptInOneLine: [Item] {
+        items.filter { item in
+            guard item.included else { return false }
+            let fragment = item.fragment
+            switch fragment.kind {
+            case .note: return !fragment.caption.trimmed.isEmpty
+            case .drawing: return true
+            case .event, .reminder: return fragment.isAnswered
+            case .photos:
+                return !fragment.caption.trimmed.isEmpty || fragment.decorations?.isEmpty == false || fragment.sourceID.hasPrefix("manual:")
+            }
+        }
+    }
+
     var coverItem: Item? {
         items.filter { $0.fragment.kind == .photos }.max { $0.fragment.assetIDs.count < $1.fragment.assetIDs.count }
     }
@@ -135,9 +152,9 @@ final class DraftModel: Identifiable {
         case .fragments:
             chosen = items.filter(\.included).map(\.fragment)
         case .oneLine:
-            // A drawing page is its own record of the day, so the one-line mode keeps it alongside the cover.
-            let kept = items.filter { $0.included && ($0.fragment.kind == .drawing || $0.fragment.kind.isQuestion) }.map(\.fragment)
-            chosen = ((showCover ? [coverItem?.fragment].compactMap { $0 } : []) + kept).sorted { $0.start < $1.start }
+            let cover = showCover ? coverItem.map { [$0.fragment] } ?? [] : []
+            let kept = keptInOneLine.map(\.fragment).filter { fragment in !cover.contains { $0.id == fragment.id } }
+            chosen = (cover + kept).sorted { $0.start < $1.start }
         }
         let fragments = chosen.compactMap { fragment -> Fragment? in
             var fragment = fragment
