@@ -67,6 +67,8 @@ struct DrawingEditorView: View {
                 .padding(.top, 8)
                 .frame(maxWidth: .infinity)
             }
+            // The keyboard must not squeeze the page: resizing the canvas mid-edit hid the strokes.
+            .ignoresSafeArea(.keyboard)
             .background(Color.paper)
             .safeAreaInset(edge: .bottom) {
                 if writing { writingBar }

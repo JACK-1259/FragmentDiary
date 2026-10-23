@@ -116,12 +116,13 @@ final class JournalStore {
     }
 
     /// Remembers where and how big a photo or drawing sits on the notebook page, and puts it on top.
-    func placeOnPage(_ fragmentID: String, in entryID: UUID, x: Double, y: Double, scale: Double) throws {
+    func placeOnPage(_ fragmentID: String, in entryID: UUID, _ placement: PagePlacement) throws {
         guard var entry = entries.first(where: { $0.id == entryID }),
               let index = entry.fragments.firstIndex(where: { $0.id == fragmentID }) else { return }
-        entry.fragments[index].pageX = x
-        entry.fragments[index].pageY = y
-        entry.fragments[index].pageScale = scale
+        entry.fragments[index].pageX = placement.x
+        entry.fragments[index].pageY = placement.y
+        entry.fragments[index].pageScale = placement.scale
+        entry.fragments[index].pageRotation = placement.rotation
         entry.fragments[index].pageZ = Date.now.timeIntervalSince1970
         try save(entry)
     }
@@ -133,6 +134,7 @@ final class JournalStore {
             entry.fragments[index].pageX = nil
             entry.fragments[index].pageY = nil
             entry.fragments[index].pageScale = nil
+            entry.fragments[index].pageRotation = nil
             entry.fragments[index].pageZ = nil
         }
         try save(entry)

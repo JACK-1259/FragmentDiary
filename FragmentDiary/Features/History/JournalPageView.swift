@@ -6,11 +6,23 @@ struct PagePrint: Identifiable {
     let isDrawing: Bool
     /// The photos of a moment, or the single image of a drawing.
     let images: [PhotoRef]
+    /// A drawing page keeps its whole notebook frame: date, weather and the words in the squares.
+    var day: Date = .now
     var weather: Weather?
+    var caption: String = ""
     var x: Double?
     var y: Double?
     var scale: Double?
+    var rotation: Double?
     var z: Double?
+}
+
+/// Where the user left a print: center as a fraction of the page width, size, and turn in degrees.
+struct PagePlacement {
+    let x: Double
+    let y: Double
+    let scale: Double
+    let rotation: Double
 }
 
 /// A page line: an answer, a note, or a caption, with the time it belongs to.
@@ -27,7 +39,7 @@ struct ScrapbookPage<Header: View>: View {
     var leadNote: String?
     var trailNote: String?
     /// Nil makes the page read-only, e.g. someone else's post in a shared folder.
-    var onPlace: ((String, Double, Double, Double) -> Void)?
+    var onPlace: ((String, PagePlacement) -> Void)?
     var onReset: (() -> Void)?
     @ViewBuilder var header: Header
 
@@ -44,16 +56,16 @@ struct ScrapbookPage<Header: View>: View {
             }
             if !prints.isEmpty {
                 CollageBoard(prints: prints, baseHeight: baseHeight, onPlace: onPlace.map { place in
-                    { id, x, y, scale in
+                    { id, placement in
                         arrangeHintSeen = true
-                        place(id, x, y, scale)
+                        place(id, placement)
                     }
                 })
                 .padding(.vertical, 12)
                 if onPlace != nil {
                     HStack {
                         if !arrangeHintSeen {
-                            Label("길게 눌러 끌면 옮겨지고, 두 손가락으로 크기를 바꿔요. 겹쳐도 돼요.", systemImage: "hand.draw")
+                            Label("길게 눌러 끌면 옮겨지고, 두 손가락으로 크기와 방향을 바꿔요. 겹쳐도 돼요.", systemImage: "hand.draw")
                         }
                         Spacer(minLength: 0)
                         if let onReset, prints.contains(where: { $0.x != nil }) {
@@ -106,7 +118,7 @@ struct JournalPageView: View {
             lines: Self.lines(of: entry.fragments),
             leadNote: entry.quick ? entry.note : nil,
             trailNote: entry.quick ? nil : entry.note,
-            onPlace: { id, x, y, scale in try? store.placeOnPage(id, in: entry.id, x: x, y: y, scale: scale) },
+            onPlace: { id, placement in try? store.placeOnPage(id, in: entry.id, placement) },
             onReset: { try? store.resetPageLayout(of: entry.id) }
         ) {
             HStack(spacing: 8) {
@@ -129,10 +141,13 @@ struct JournalPageView: View {
         fragments.compactMap { fragment in
             switch fragment.kind {
             case .photos where !fragment.assetIDs.isEmpty:
-                PagePrint(id: fragment.id, isDrawing: false, images: fragment.photos, x: fragment.pageX, y: fragment.pageY, scale: fragment.pageScale, z: fragment.pageZ)
+                PagePrint(id: fragment.id, isDrawing: false, images: fragment.photos, x: fragment.pageX, y: fragment.pageY, scale: fragment.pageScale, rotation: fragment.pageRotation, z: fragment.pageZ)
             case .drawing:
                 fragment.drawingID.map {
-                    PagePrint(id: fragment.id, isDrawing: true, images: [.journal($0)], weather: fragment.weather, x: fragment.pageX, y: fragment.pageY, scale: fragment.pageScale, z: fragment.pageZ)
+                    PagePrint(
+                        id: fragment.id, isDrawing: true, images: [.journal($0)], day: fragment.start, weather: fragment.weather, caption: fragment.caption,
+                        x: fragment.pageX, y: fragment.pageY, scale: fragment.pageScale, rotation: fragment.pageRotation, z: fragment.pageZ
+                    )
                 }
             default: nil
             }
@@ -144,7 +159,10 @@ struct JournalPageView: View {
         fragments.compactMap { fragment in
             let time = DateText.timelineLabel(for: fragment)
             switch fragment.kind {
-            case .photos, .drawing, .note:
+            // A drawing's words stay in its own squares, on the print.
+            case .drawing:
+                return nil
+            case .photos, .note:
                 return fragment.caption.isEmpty ? nil : PageLine(time: time, text: fragment.caption)
             case .event, .reminder:
                 return PageLine(time: time, text: sentence(for: fragment))
@@ -196,7 +214,7 @@ private struct HandLine: View {
 private struct CollageBoard: View {
     let prints: [PagePrint]
     let baseHeight: CGFloat
-    let onPlace: ((String, Double, Double, Double) -> Void)?
+    let onPlace: ((String, PagePlacement) -> Void)?
 
     @State private var width: CGFloat = 0
 
@@ -210,7 +228,10 @@ private struct CollageBoard: View {
 
     var body: some View {
         let placed = width > 0 ? layout(width: width) : []
-        let height = placed.map { $0.center.y + PrintGeometry.size(of: $0.fragment, height: printHeight($0.fragment, $0.scale)).height / 2 }.max() ?? baseHeight
+        let height = placed.map { item in
+            let size = PrintGeometry.size(of: item.fragment, height: printHeight(item.fragment, item.scale))
+            return item.center.y + PrintGeometry.turned(size, degrees: item.fragment.rotation ?? 2).height / 2
+        }.max() ?? baseHeight
         ZStack(alignment: .topLeading) {
             ForEach(placed.sorted { ($0.fragment.z ?? Double($0.index)) < ($1.fragment.z ?? Double($1.index)) }) { item in
                 CollagePrint(
@@ -222,7 +243,9 @@ private struct CollageBoard: View {
                     height: { scale in printHeight(item.fragment, scale) },
                     scaleRange: scaleRange(item.fragment),
                     onPlace: onPlace.map { place in
-                        { center, scale in place(item.fragment.id, center.x / width, center.y / width, scale) }
+                        { center, scale, rotation in
+                            place(item.fragment.id, PagePlacement(x: center.x / width, y: center.y / width, scale: scale, rotation: rotation))
+                        }
                     }
                 )
             }
@@ -249,7 +272,10 @@ private struct CollageBoard: View {
     /// The scales that actually change the print's size. Pinching is clamped to these, so there's no dead zone
     /// where fingers move but the print doesn't (e.g. after over-stretching past the page width).
     private func scaleRange(_ fragment: PagePrint) -> ClosedRange<Double> {
-        let widest = max((width - 4) / PrintGeometry.widthPerHeight(fragment) + 16, Self.smallestHeight)
+        // Measured as turned: a tilted print takes more width than an upright one.
+        let upright = PrintGeometry.size(of: fragment, height: baseHeight)
+        let turned = PrintGeometry.turned(upright, degrees: fragment.rotation ?? 2)
+        let widest = max(baseHeight * width / turned.width, Self.smallestHeight)
         return Double(Self.smallestHeight / baseHeight)...Double(widest / baseHeight)
     }
 
@@ -300,10 +326,11 @@ private struct CollagePrint: View {
     let boardWidth: CGFloat
     let height: (Double) -> CGFloat
     let scaleRange: ClosedRange<Double>
-    let onPlace: ((CGPoint, Double) -> Void)?
+    let onPlace: ((CGPoint, Double, Double) -> Void)?
 
     @State private var drag: CGSize = .zero
     @State private var pinch: CGFloat = 1
+    @State private var twist: Angle = .zero
     @State private var lifted = false
 
     /// Starts from the size actually shown, so a pinch responds from its first movement.
@@ -312,27 +339,36 @@ private struct CollagePrint: View {
         return min(max(start * Double(pinch), scaleRange.lowerBound), scaleRange.upperBound)
     }
 
+    /// The saved turn, or the gentle default tilt for prints never rotated.
+    private var savedRotation: Double { fragment.rotation ?? tilt }
+
+    private var liveRotation: Double {
+        let degrees = (savedRotation + twist.degrees).truncatingRemainder(dividingBy: 360)
+        // Settle within a couple of degrees of straight, so lining a print up square is easy.
+        return abs(degrees) < 2 && twist != .zero ? 0 : degrees
+    }
+
     var body: some View {
         let printHeight = height(liveScale)
         let size = PrintGeometry.size(of: fragment, height: printHeight)
         Group {
             if fragment.isDrawing, let image = fragment.images.first {
-                PinnedDrawing(image: image, weather: fragment.weather, height: printHeight)
+                PinnedDrawing(print: fragment, image: image, size: size)
             } else {
                 TapedPrints(photos: fragment.images, height: printHeight)
             }
         }
         .frame(width: size.width, height: size.height)
-        .rotationEffect(.degrees(tilt))
+        .rotationEffect(.degrees(liveRotation))
         .scaleEffect(lifted ? 1.04 : 1)
         .shadow(color: .black.opacity(lifted ? 0.22 : 0), radius: 14, y: 8)
         // A margin around small prints so both fingers of a pinch land on them.
         .padding(18)
         .contentShape(Rectangle())
         .padding(-18)
-        .position(x: liveX(width: size.width), y: max(center.y + drag.height, size.height / 2))
-        .gesture(move.simultaneously(with: resize), isEnabled: onPlace != nil)
-        .zIndex(lifted || pinch != 1 ? 1 : 0)
+        .position(liveCenter(size: size))
+        .gesture(move.simultaneously(with: transform), isEnabled: onPlace != nil)
+        .zIndex(lifted || pinch != 1 || twist != .zero ? 1 : 0)
         .animation(.snappy(duration: 0.2), value: lifted)
         .sensoryFeedback(.impact(weight: .light), trigger: lifted) { _, new in new }
         .accessibilityElement(children: .combine)
@@ -368,42 +404,63 @@ private struct CollagePrint: View {
             }
     }
 
-    private var resize: some Gesture {
-        MagnifyGesture()
-            .onChanged { pinch = $0.magnification }
+    /// Pinch and twist as one gesture, committed once when the fingers lift, so neither half
+    /// overwrites the other with a stale value.
+    private var transform: some Gesture {
+        SimultaneousGesture(MagnifyGesture(), RotateGesture(minimumAngleDelta: .degrees(3)))
+            .onChanged { value in
+                pinch = value.first?.magnification ?? 1
+                twist = value.second?.rotation ?? .zero
+            }
             .onEnded { _ in
                 commit(scale: liveScale)
                 pinch = 1
+                twist = .zero
             }
     }
 
-    private func liveX(width: CGFloat) -> CGFloat {
-        guard width < boardWidth else { return boardWidth / 2 }
-        return min(max(center.x + drag.width, width / 2), boardWidth - width / 2)
+    private func liveCenter(size: CGSize) -> CGPoint {
+        clamped(CGPoint(x: center.x + drag.width, y: center.y + drag.height), size: PrintGeometry.turned(size, degrees: liveRotation))
+    }
+
+    /// Keeps the print, as turned, on the paper so it never covers the binding or spills off the page.
+    private func clamped(_ point: CGPoint, size: CGSize) -> CGPoint {
+        let x = size.width >= boardWidth ? boardWidth / 2 : min(max(point.x, size.width / 2), boardWidth - size.width / 2)
+        return CGPoint(x: x, y: max(point.y, size.height / 2))
     }
 
     private func commit(scale: Double, offset: CGSize = .zero) {
-        let size = PrintGeometry.size(of: fragment, height: height(scale))
-        // Keep the print on the paper so it never covers the binding or spills off the page.
-        let x = size.width >= boardWidth
-            ? boardWidth / 2
-            : min(max(center.x + offset.width, size.width / 2), boardWidth - size.width / 2)
-        let y = max(center.y + offset.height, size.height / 2)
-        onPlace?(CGPoint(x: x, y: y), scale)
+        var scale = scale
+        var size = PrintGeometry.turned(PrintGeometry.size(of: fragment, height: height(scale)), degrees: liveRotation)
+        // Turning a big print can make it wider than the page; shrink it just enough to fit.
+        if size.width > boardWidth {
+            let fit = Double(boardWidth / size.width)
+            scale *= fit
+            size = CGSize(width: size.width * fit, height: size.height * fit)
+        }
+        let point = clamped(CGPoint(x: center.x + offset.width, y: center.y + offset.height), size: size)
+        onPlace?(point, scale, liveRotation)
     }
 }
 
 enum PrintGeometry {
     /// Mirrors PhotoCollage's geometry: up to three tilted tiles, each overlapping the last.
     static func widthPerHeight(_ fragment: PagePrint) -> CGFloat {
-        if fragment.isDrawing { return DrawingDiary.aspectRatio }
+        if fragment.isDrawing { return DrawingPrint.width / DrawingPrint.height }
         let shown = CGFloat(min(max(fragment.images.count, 1), 3))
         return shown == 1 ? 1.3 : 0.78 * (1 + 0.62 * (shown - 1))
     }
 
+    /// The upright box a turned print occupies.
+    static func turned(_ size: CGSize, degrees: Double) -> CGSize {
+        let radians = degrees * .pi / 180
+        let c = abs(cos(radians)), s = abs(sin(radians))
+        return CGSize(width: size.width * c + size.height * s, height: size.width * s + size.height * c)
+    }
+
     static func size(of fragment: PagePrint, height: CGFloat) -> CGSize {
         if fragment.isDrawing {
-            return CGSize(width: (height - 8) * DrawingDiary.aspectRatio + 8, height: height)
+            return CGSize(width: height * widthPerHeight(fragment), height: height)
         }
         return CGSize(width: (height - 16) * widthPerHeight(fragment) + 4, height: height)
     }
@@ -425,31 +482,34 @@ private struct TapedPrints: View {
     }
 }
 
-/// A drawing page stuck on like a note card.
+/// A drawing page as a print: the whole picture-diary page — date and weather on top, the picture,
+/// and the words still sitting in their squares — laid out at one size and scaled, so it reads the same at any size.
 private struct PinnedDrawing: View {
+    let print: PagePrint
     let image: PhotoRef
-    let weather: Weather?
-    let height: CGFloat
+    let size: CGSize
 
     var body: some View {
-        WholeImage(photo: image)
-            .aspectRatio(DrawingDiary.aspectRatio, contentMode: .fit)
-            .frame(width: (height - 8) * DrawingDiary.aspectRatio, height: height - 8)
-            .padding(4)
-            .background(Color.white)
-            .shadow(color: .black.opacity(0.15), radius: 5, y: 2)
-            .overlay(alignment: .top) {
-                WashiTape(rgb: 0xB8D4EC).scaleEffect(0.8).offset(y: -8)
-            }
-            .overlay(alignment: .bottomTrailing) {
-                if let weather {
-                    Image(systemName: weather.symbol)
-                        .font(.caption)
-                        .foregroundStyle(weather.color)
-                        .padding(6)
-                }
-            }
-            .accessibilityLabel("그림")
+        NotebookPage(day: print.day, weather: print.weather, text: print.caption) {
+            WholeImage(photo: image)
+        }
+        .frame(width: DrawingPrint.width, height: DrawingPrint.height)
+        .scaleEffect(size.height / DrawingPrint.height, anchor: .topLeading)
+        .frame(width: size.width, height: size.height, alignment: .topLeading)
+        .shadow(color: .black.opacity(0.15), radius: 5, y: 2)
+        .overlay(alignment: .top) {
+            WashiTape(rgb: 0xB8D4EC).scaleEffect(0.8).offset(y: -8)
+        }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(print.caption.isEmpty ? "그림일기" : "그림일기, \(print.caption)")
+    }
+}
+
+/// The drawing page's layout size: header, picture box and four rows of squares at a fixed width.
+enum DrawingPrint {
+    static let width: CGFloat = 320
+    static var height: CGFloat {
+        40 + 1.5 + width / DrawingDiary.aspectRatio + 1.5 + width * CGFloat(DrawingDiary.rows) / CGFloat(DrawingDiary.columns)
     }
 }
 

@@ -103,6 +103,8 @@ nonisolated struct Fragment: Codable, Hashable, Identifiable, Sendable {
     var pageY: Double?
     /// How big the user made it (1 = default size).
     var pageScale: Double?
+    /// Turn in degrees; nil keeps the page's gentle default tilt.
+    var pageRotation: Double?
     /// Stacking order when prints overlap; the last one touched sits on top.
     var pageZ: Double?
 

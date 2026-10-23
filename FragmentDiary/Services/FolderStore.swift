@@ -96,6 +96,7 @@ final class FolderStore {
                 pageX: fragment.pageX,
                 pageY: fragment.pageY,
                 pageScale: fragment.pageScale,
+                pageRotation: fragment.pageRotation,
                 pageZ: fragment.pageZ
             ))
         }
@@ -104,13 +105,14 @@ final class FolderStore {
     }
 
     /// Moves or resizes one print on a post's page and brings it to the top. Only the author's posts are arranged.
-    func placeOnPage(_ fragmentID: String, post postID: UUID, in folderID: UUID, x: Double, y: Double, scale: Double) throws {
+    func placeOnPage(_ fragmentID: String, post postID: UUID, in folderID: UUID, _ placement: PagePlacement) throws {
         try update(folderID) { folder in
             guard let p = folder.posts.firstIndex(where: { $0.id == postID }),
                   let f = folder.posts[p].fragments.firstIndex(where: { $0.id.uuidString == fragmentID }) else { return }
-            folder.posts[p].fragments[f].pageX = x
-            folder.posts[p].fragments[f].pageY = y
-            folder.posts[p].fragments[f].pageScale = scale
+            folder.posts[p].fragments[f].pageX = placement.x
+            folder.posts[p].fragments[f].pageY = placement.y
+            folder.posts[p].fragments[f].pageScale = placement.scale
+            folder.posts[p].fragments[f].pageRotation = placement.rotation
             folder.posts[p].fragments[f].pageZ = Date.now.timeIntervalSince1970
         }
     }
@@ -122,6 +124,7 @@ final class FolderStore {
                 folder.posts[p].fragments[f].pageX = nil
                 folder.posts[p].fragments[f].pageY = nil
                 folder.posts[p].fragments[f].pageScale = nil
+                folder.posts[p].fragments[f].pageRotation = nil
                 folder.posts[p].fragments[f].pageZ = nil
             }
         }

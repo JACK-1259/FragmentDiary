@@ -51,6 +51,7 @@ final class DraftModel: Identifiable {
                 refreshed.pageX = items[index].fragment.pageX
                 refreshed.pageY = items[index].fragment.pageY
                 refreshed.pageZ = items[index].fragment.pageZ
+                refreshed.pageRotation = items[index].fragment.pageRotation
                 // Decorations belong to the user, not the collector; keep them for photos still in the moment.
                 refreshed.decorations = items[index].fragment.decorations?.filter { refreshed.assetIDs.contains($0.key) }
                 if refreshed.decorations?.isEmpty == true { refreshed.decorations = nil }

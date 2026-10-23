@@ -27,6 +27,7 @@ nonisolated struct PostFragment: Codable, Hashable, Identifiable, Sendable {
     var pageX: Double?
     var pageY: Double?
     var pageScale: Double?
+    var pageRotation: Double?
     var pageZ: Double?
 
     var asFragment: Fragment {
@@ -38,7 +39,10 @@ nonisolated struct PostFragment: Codable, Hashable, Identifiable, Sendable {
     var pagePrint: PagePrint? {
         guard (kind == .photos || kind == .drawing), !attachmentIDs.isEmpty else { return nil }
         let images = kind == .drawing ? [PhotoRef.attachment(attachmentIDs[0])] : attachmentIDs.map(PhotoRef.attachment)
-        return PagePrint(id: id.uuidString, isDrawing: kind == .drawing, images: images, weather: weather, x: pageX, y: pageY, scale: pageScale, z: pageZ)
+        return PagePrint(
+            id: id.uuidString, isDrawing: kind == .drawing, images: images, day: start, weather: weather, caption: kind == .drawing ? caption : "",
+            x: pageX, y: pageY, scale: pageScale, rotation: pageRotation, z: pageZ
+        )
     }
 }
 

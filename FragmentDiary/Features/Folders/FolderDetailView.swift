@@ -172,8 +172,8 @@ private struct PostCard: View {
             prints: post.fragments.compactMap(\.pagePrint),
             lines: post.fragments.compactMap(Self.line),
             trailNote: post.note,
-            onPlace: isMine ? { id, x, y, scale in
-                try? folderStore.placeOnPage(id, post: post.id, in: folderID, x: x, y: y, scale: scale)
+            onPlace: isMine ? { id, placement in
+                try? folderStore.placeOnPage(id, post: post.id, in: folderID, placement)
             } : nil,
             onReset: isMine ? { try? folderStore.resetPageLayout(post: post.id, in: folderID) } : nil
         ) {
@@ -216,7 +216,9 @@ private struct PostCard: View {
     private static func line(_ fragment: PostFragment) -> PageLine? {
         let time = DateText.timelineLabel(for: fragment.asFragment)
         switch fragment.kind {
-        case .photos, .drawing, .note:
+        case .drawing:
+            return nil
+        case .photos, .note:
             return fragment.caption.isEmpty ? nil : PageLine(time: time, text: fragment.caption)
         case .event, .reminder:
             return PageLine(time: time, text: JournalPageView.sentence(for: fragment.asFragment))
