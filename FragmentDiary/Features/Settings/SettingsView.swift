@@ -103,7 +103,8 @@ struct SettingsView: View {
                     .font(.subheadline)
                     .foregroundStyle(Color.ink)
 
-                    #if DEBUG
+                    // A development tool, kept out of device builds so demos show only the real app.
+                    #if DEBUG && targetEnvironment(simulator)
                     Section("디버그") {
                         NavigationLink("위젯 미리보기") { WidgetPreviewView() }
                     }

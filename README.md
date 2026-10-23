@@ -216,7 +216,7 @@ swift Tools/MakeSamplePhotos.swift /tmp/samples && xcrun simctl addmedia booted 
 | 실행 인자 `-seedSampleEvents` | 오늘·어제 날짜로 샘플 캘린더 일정과 끝낸 미리 알림을 넣어요. |
 | 실행 인자 `-removeSampleData` | 넣었던 샘플 일정과 샘플 사진을 지워요. |
 | 잠금 화면의 "잠금 건너뛰기" | 시뮬레이터에서만 보여요. Face ID를 흉내 내지 않고 바로 열어요. 실기기에는 나타나지 않아요. |
-| 설정 › 디버그 › 위젯 미리보기 | 위젯 5가지 크기를 앱 안에서 바로 확인해요. |
+| 설정 › 디버그 › 위젯 미리보기 | 시뮬레이터에서만 보여요. 위젯 5가지 크기를 앱 안에서 바로 확인해요. |
 
 > 시뮬레이터에서 Face ID를 실제로 테스트하려면 Simulator 메뉴 **Features › Face ID › Enrolled**를 켜고,
 > 인증 창이 뜨면 **Matching Face**(⌘⇧M)를 보내요.
