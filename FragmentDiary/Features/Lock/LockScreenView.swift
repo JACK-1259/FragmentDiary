@@ -37,8 +37,9 @@ struct LockScreenView: View {
                 }
                 .buttonStyle(PrimaryButtonStyle())
                 .disabled(isAuthenticating)
-                #if DEBUG
-                Button("잠금 건너뛰기 (디버그 전용)") {
+                // The simulator's Face ID is awkward to drive, so only there can the lock be skipped.
+                #if DEBUG && targetEnvironment(simulator)
+                Button("잠금 건너뛰기 (시뮬레이터 전용)") {
                     Task { await unlock(skipBiometrics: true) }
                 }
                 .font(.footnote)
@@ -49,7 +50,8 @@ struct LockScreenView: View {
         }
         .padding(24)
         .readableColumn(520)
-        #if !DEBUG
+        // Real devices prompt for Face ID as soon as the lock appears; the simulator waits for a tap.
+        #if !targetEnvironment(simulator)
         .task {
             if scenePhase == .active { await autoUnlock() }
         }
