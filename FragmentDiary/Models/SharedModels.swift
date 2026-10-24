@@ -29,6 +29,7 @@ nonisolated struct PostFragment: Codable, Hashable, Identifiable, Sendable {
     var pageScale: Double?
     var pageRotation: Double?
     var pageZ: Double?
+    var noteColor: Int?
 
     var asFragment: Fragment {
         var fragment = Fragment(sourceID: id.uuidString, kind: kind, start: start, end: end, title: title, place: place, caption: caption, weather: weather)
@@ -38,8 +39,10 @@ nonisolated struct PostFragment: Codable, Hashable, Identifiable, Sendable {
 
     var pagePrint: PagePrint? {
         switch kind {
+        case .emoji where !caption.trimmed.isEmpty:
+            return PagePrint(id: id.uuidString, kind: .emoji, caption: caption, x: pageX, y: pageY, scale: pageScale, rotation: pageRotation, z: pageZ)
         case .note where !caption.trimmed.isEmpty:
-            return PagePrint(id: id.uuidString, kind: .note, day: start, caption: caption, x: pageX, y: pageY, scale: pageScale, rotation: pageRotation, z: pageZ)
+            return PagePrint(id: id.uuidString, kind: .note, day: start, caption: caption, noteColor: noteColor, x: pageX, y: pageY, scale: pageScale, rotation: pageRotation, z: pageZ)
         case .photos, .drawing:
             guard !attachmentIDs.isEmpty else { return nil }
             let images = kind == .drawing ? [PhotoRef.attachment(attachmentIDs[0])] : attachmentIDs.map(PhotoRef.attachment)

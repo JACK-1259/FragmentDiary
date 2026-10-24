@@ -40,11 +40,13 @@ struct SecondaryButtonStyle: ButtonStyle {
 }
 
 struct ChipButtonStyle: ButtonStyle {
+    var horizontalPadding: CGFloat = 14
+
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
             .font(.subheadline.weight(.medium))
             .foregroundStyle(Color.ink)
-            .padding(.horizontal, 14)
+            .padding(.horizontal, horizontalPadding)
             .padding(.vertical, 9)
             .background(Capsule().fill(Color.card))
             .overlay(Capsule().stroke(Color.hairline, lineWidth: 1))

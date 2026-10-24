@@ -44,6 +44,8 @@ enum JournalSearch {
                     guard matches(fragment.title) || matches(fragment.place) || matches(fragment.caption) || matches(fragment.reaction) else { continue }
                     let detail = [DateText.timelineLabel(for: fragment), fragment.place, fragment.reaction].compactMap { $0 }.joined(separator: " · ")
                     hits.append(Hit(entry: entry, text: JournalPageView.sentence(for: fragment), kind: fragment.kind, detail: detail))
+                case .emoji:
+                    continue
                 case .photos, .note, .drawing:
                     guard matches(fragment.caption) else { continue }
                     let detail = fragment.kind == .note ? "메모 조각" : fragment.kind == .drawing ? "그림일기" : "사진 \(fragment.assetIDs.count)장"
@@ -180,6 +182,7 @@ private struct SearchHitRow: View {
         case .reminder: "checklist"
         case .drawing: "scribble.variable"
         case .photos: "photo"
+        case .emoji: "face.smiling"
         case .note, .none: "pencil.line"
         }
     }

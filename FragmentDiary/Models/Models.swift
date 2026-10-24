@@ -42,6 +42,8 @@ nonisolated enum PhotoRef: Hashable, Sendable {
 
 nonisolated enum FragmentKind: String, Codable, Sendable {
     case photos, event, note, drawing, reminder
+    /// Emoji only: a day, or a moment, told in a few emoji. The emoji are stored in `caption`.
+    case emoji
 
     /// Calendar events and finished reminders are asked about rather than shown as-is.
     var isQuestion: Bool { self == .event || self == .reminder }
@@ -107,6 +109,8 @@ nonisolated struct Fragment: Codable, Hashable, Identifiable, Sendable {
     var pageRotation: Double?
     /// Stacking order when prints overlap; the last one touched sits on top.
     var pageZ: Double?
+    /// The sticky-note color the user picked for a memo (see `StickyNoteColor`).
+    var noteColor: Int?
 
     var id: String { sourceID }
 
@@ -135,6 +139,8 @@ nonisolated struct Fragment: Codable, Hashable, Identifiable, Sendable {
             base = ["그림일기", weather.map { "날씨 \($0.label)" }].compactMap { $0 }.joined(separator: " · ")
         case .reminder:
             base = "끝낸 일: \(title ?? "")"
+        case .emoji:
+            return caption
         }
         let answer = [reaction, caption.isEmpty ? nil : caption].compactMap { $0 }.joined(separator: " ")
         return answer.isEmpty ? base : "\(base) — \(answer)"

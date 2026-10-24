@@ -13,7 +13,7 @@ final class DraftModel: Identifiable {
         var isNew: Bool
 
         var id: String { fragment.sourceID }
-        var isRemovable: Bool { fragment.kind == .note || fragment.kind == .drawing || fragment.sourceID.hasPrefix("manual:") }
+        var isRemovable: Bool { [.note, .drawing, .emoji].contains(fragment.kind) || fragment.sourceID.hasPrefix("manual:") }
     }
 
     let id = UUID()
@@ -63,6 +63,14 @@ final class DraftModel: Identifiable {
             }
         }
         items.sort { $0.fragment.start < $1.fragment.start }
+    }
+
+    /// An emoji-only fragment; the picker fills its `caption`.
+    func addEmoji(_ emoji: String) -> String {
+        let fragment = Fragment(sourceID: "emoji:\(UUID().uuidString)", kind: .emoji, start: manualTimestamp(), caption: emoji)
+        items.append(Item(fragment: fragment, included: true, isNew: false))
+        items.sort { $0.fragment.start < $1.fragment.start }
+        return fragment.id
     }
 
     func addNote() {
@@ -124,7 +132,7 @@ final class DraftModel: Identifiable {
             guard item.included else { return false }
             let fragment = item.fragment
             switch fragment.kind {
-            case .note: return !fragment.caption.trimmed.isEmpty
+            case .note, .emoji: return !fragment.caption.trimmed.isEmpty
             case .drawing: return true
             case .event, .reminder: return fragment.isAnswered
             case .photos:
@@ -160,7 +168,7 @@ final class DraftModel: Identifiable {
         let fragments = chosen.compactMap { fragment -> Fragment? in
             var fragment = fragment
             fragment.caption = fragment.caption.trimmed
-            return fragment.kind == .note && fragment.caption.isEmpty ? nil : fragment
+            return (fragment.kind == .note || fragment.kind == .emoji) && fragment.caption.isEmpty ? nil : fragment
         }
         return DiaryEntry(
             id: existing?.id ?? UUID(),

@@ -3,7 +3,7 @@ import SwiftUI
 /// One photo moment or drawing as it sits on a notebook page, wherever it came from (journal or shared folder).
 struct PagePrint: Identifiable {
     enum Kind {
-        case photos, drawing, note
+        case photos, drawing, note, emoji
     }
 
     let id: String
@@ -15,6 +15,8 @@ struct PagePrint: Identifiable {
     var day: Date = .now
     var weather: Weather?
     var caption: String = ""
+    /// A memo's sticky-note color, as an index into `StickyNoteColor.all`.
+    var noteColor: Int?
     var x: Double?
     var y: Double?
     var scale: Double?
@@ -56,9 +58,6 @@ struct ScrapbookPage<Header: View>: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             header
-            if let leadNote, !leadNote.isEmpty {
-                HandLine(time: nil, text: leadNote, large: true)
-            }
             if !prints.isEmpty {
                 CollageBoard(prints: prints, baseHeight: baseHeight, onPlace: onPlace.map { place in
                     { id, placement in
@@ -82,6 +81,10 @@ struct ScrapbookPage<Header: View>: View {
                     .foregroundStyle(Self.muted)
                     .padding(.bottom, 6)
                 }
+            }
+            // The one-line sentence is written under the stuck-on prints, so drawings and memos stay on top.
+            if let leadNote, !leadNote.isEmpty {
+                HandLine(time: nil, text: leadNote, large: true)
             }
             ForEach(Array(lines.enumerated()), id: \.offset) { _, line in
                 HandLine(time: line.time, text: line.text)
@@ -147,9 +150,14 @@ struct JournalPageView: View {
             switch fragment.kind {
             case .photos where !fragment.assetIDs.isEmpty:
                 PagePrint(id: fragment.id, kind: .photos, images: fragment.photos, x: fragment.pageX, y: fragment.pageY, scale: fragment.pageScale, rotation: fragment.pageRotation, z: fragment.pageZ)
+            case .emoji where !fragment.caption.trimmed.isEmpty:
+                PagePrint(
+                    id: fragment.id, kind: .emoji, caption: fragment.caption,
+                    x: fragment.pageX, y: fragment.pageY, scale: fragment.pageScale, rotation: fragment.pageRotation, z: fragment.pageZ
+                )
             case .note where !fragment.caption.trimmed.isEmpty:
                 PagePrint(
-                    id: fragment.id, kind: .note, day: fragment.start, caption: fragment.caption,
+                    id: fragment.id, kind: .note, day: fragment.start, caption: fragment.caption, noteColor: fragment.noteColor,
                     x: fragment.pageX, y: fragment.pageY, scale: fragment.pageScale, rotation: fragment.pageRotation, z: fragment.pageZ
                 )
             case .drawing:
@@ -170,7 +178,7 @@ struct JournalPageView: View {
             let time = DateText.timelineLabel(for: fragment)
             switch fragment.kind {
             // A drawing's words stay in its own squares and a memo is its own sticky note, both on the board.
-            case .drawing, .note:
+            case .drawing, .note, .emoji:
                 return nil
             case .photos:
                 return fragment.caption.isEmpty ? nil : PageLine(time: time, text: fragment.caption)
@@ -276,17 +284,24 @@ private struct CollageBoard: View {
     /// Free sizing, limited only so a print can't vanish or outgrow the page.
     private func printHeight(_ fragment: PagePrint, _ scale: Double) -> CGFloat {
         let range = scaleRange(fragment)
-        return baseHeight * CGFloat(min(max(scale, range.lowerBound), range.upperBound))
+        return base(fragment) * CGFloat(min(max(scale, range.lowerBound), range.upperBound))
+    }
+
+    /// Emoji start sticker-sized rather than print-sized.
+    private func base(_ fragment: PagePrint) -> CGFloat {
+        fragment.kind == .emoji ? baseHeight * 0.55 : baseHeight
     }
 
     /// The scales that actually change the print's size. Pinching is clamped to these, so there's no dead zone
     /// where fingers move but the print doesn't (e.g. after over-stretching past the page width).
     private func scaleRange(_ fragment: PagePrint) -> ClosedRange<Double> {
         // Measured as turned: a tilted print takes more width than an upright one.
-        let upright = PrintGeometry.size(of: fragment, height: baseHeight)
+        let base = base(fragment)
+        let upright = PrintGeometry.size(of: fragment, height: base)
         let turned = PrintGeometry.turned(upright, degrees: fragment.rotation ?? 2)
-        let widest = max(baseHeight * width / turned.width, Self.smallestHeight)
-        return Double(Self.smallestHeight / baseHeight)...Double(widest / baseHeight)
+        let smallest = fragment.kind == .emoji ? Self.smallestHeight * 0.6 : Self.smallestHeight
+        let widest = max(base * width / turned.width, smallest)
+        return Double(smallest / base)...Double(widest / base)
     }
 
     /// Untouched prints flow left to right in centered rows; moved ones keep their stored spot.
@@ -327,7 +342,11 @@ private struct CollageBoard: View {
     }
 }
 
-/// One print on the board: hold and drag to move it, pinch to resize it freely.
+/// One print on the board: hold and drag to move it, pinch to resize and twist to turn it.
+///
+/// While fingers are down the print is only transformed on screen (scale, rotation, offset) at its committed
+/// layout size. Nothing is re-laid-out, clamped or snapped until the fingers lift, which is what kept the
+/// earlier version from jumping around mid-gesture.
 private struct CollagePrint: View {
     let fragment: PagePrint
     let center: CGPoint
@@ -339,30 +358,37 @@ private struct CollagePrint: View {
     let onPlace: ((CGPoint, Double, Double) -> Void)?
 
     @State private var drag: CGSize = .zero
-    @State private var pinch: CGFloat = 1
-    @State private var twist: Angle = .zero
     @State private var lifted = false
+    @State private var pinch: CGFloat = 1
+    @State private var twist: Double = 0
+    /// Set once a two-finger gesture starts, so a resting finger can't also drag the print around.
+    @State private var transforming = false
+    /// Small, unintended pinch or twist while doing the other is ignored until it passes these.
+    @State private var scaleEngaged = false
+    @State private var rotationEngaged = false
+    /// The finger values at the moment each half engaged; motion is measured from there so nothing jumps.
+    @State private var scaleBase: CGFloat = 1
+    @State private var rotationBase: Double = 0
 
-    /// Starts from the size actually shown, so a pinch responds from its first movement.
-    private var liveScale: Double {
-        let start = min(max(scale, scaleRange.lowerBound), scaleRange.upperBound)
-        return min(max(start * Double(pinch), scaleRange.lowerBound), scaleRange.upperBound)
-    }
+    private static let scaleDeadZone: CGFloat = 0.06
+    private static let rotationDeadZone: Double = 10
 
-    /// The saved turn, or the gentle default tilt for prints never rotated.
+    private var committedScale: Double { min(max(scale, scaleRange.lowerBound), scaleRange.upperBound) }
     private var savedRotation: Double { fragment.rotation ?? tilt }
 
-    private var liveRotation: Double {
-        let degrees = (savedRotation + twist.degrees).truncatingRemainder(dividingBy: 360)
-        // Settle within a couple of degrees of straight, so lining a print up square is easy.
-        return abs(degrees) < 2 && twist != .zero ? 0 : degrees
+    /// The on-screen factor relative to the committed size, kept within the allowed sizes.
+    private var visualPinch: CGFloat {
+        let target = min(max(committedScale * Double(pinch), scaleRange.lowerBound), scaleRange.upperBound)
+        return CGFloat(target / committedScale)
     }
 
     var body: some View {
-        let printHeight = height(liveScale)
+        let printHeight = height(committedScale)
         let size = PrintGeometry.size(of: fragment, height: printHeight)
         Group {
-            if fragment.kind == .note {
+            if fragment.kind == .emoji {
+                EmojiPrint(print: fragment, size: size)
+            } else if fragment.kind == .note {
                 StickyNote(print: fragment, size: size)
             } else if fragment.isDrawing, let image = fragment.images.first {
                 PinnedDrawing(print: fragment, image: image, size: size)
@@ -371,24 +397,25 @@ private struct CollagePrint: View {
             }
         }
         .frame(width: size.width, height: size.height)
-        .rotationEffect(.degrees(liveRotation))
-        .scaleEffect(lifted ? 1.04 : 1)
-        .shadow(color: .black.opacity(lifted ? 0.22 : 0), radius: 14, y: 8)
+        .rotationEffect(.degrees(savedRotation + twist))
+        .scaleEffect(visualPinch * (lifted ? 1.04 : 1))
+        .shadow(color: .black.opacity(lifted || transforming ? 0.22 : 0), radius: 14, y: 8)
         // A margin around small prints so both fingers of a pinch land on them.
-        .padding(18)
+        .padding(22)
         .contentShape(Rectangle())
-        .padding(-18)
-        .position(liveCenter(size: size))
+        .padding(-22)
+        .position(center)
+        .offset(drag)
         .gesture(move.simultaneously(with: transform), isEnabled: onPlace != nil)
-        .zIndex(lifted || pinch != 1 || twist != .zero ? 1 : 0)
+        .zIndex(lifted || transforming ? 1 : 0)
         .animation(.snappy(duration: 0.2), value: lifted)
         .sensoryFeedback(.impact(weight: .light), trigger: lifted) { _, new in new }
         .accessibilityElement(children: .combine)
         .accessibilityAdjustableAction { direction in
             guard onPlace != nil else { return }
             switch direction {
-            case .increment: commit(scale: min(liveScale + 0.25, scaleRange.upperBound))
-            case .decrement: commit(scale: max(liveScale - 0.25, scaleRange.lowerBound))
+            case .increment: commit(scale: min(committedScale + 0.25, scaleRange.upperBound), rotation: savedRotation)
+            case .decrement: commit(scale: max(committedScale - 0.25, scaleRange.lowerBound), rotation: savedRotation)
             @unknown default: break
             }
         }
@@ -397,42 +424,58 @@ private struct CollagePrint: View {
     /// Holding first keeps a plain swipe free to scroll the page.
     private var move: some Gesture {
         LongPressGesture(minimumDuration: 0.25)
-            .sequenced(before: DragGesture(minimumDistance: 0, coordinateSpace: .local))
+            .sequenced(before: DragGesture(minimumDistance: 0, coordinateSpace: .global))
             .onChanged { value in
-                if case .second(true, let dragValue) = value {
-                    lifted = true
-                    drag = dragValue?.translation ?? .zero
-                }
+                guard !transforming, case .second(true, let dragValue) = value else { return }
+                lifted = true
+                drag = dragValue?.translation ?? .zero
             }
             .onEnded { value in
-                if case .second(true, let dragValue) = value {
-                    let moved = dragValue?.translation ?? .zero
+                defer {
                     lifted = false
-                    commit(scale: liveScale, offset: moved)
                     drag = .zero
-                } else {
-                    lifted = false
                 }
+                guard !transforming, case .second(true, let dragValue) = value, let moved = dragValue?.translation else { return }
+                commit(scale: committedScale, rotation: savedRotation, offset: moved)
             }
     }
 
-    /// Pinch and twist as one gesture, committed once when the fingers lift, so neither half
-    /// overwrites the other with a stale value.
+    /// Pinch and twist as one gesture, applied as a pure visual transform and committed once on lift.
     private var transform: some Gesture {
-        SimultaneousGesture(MagnifyGesture(), RotateGesture(minimumAngleDelta: .degrees(3)))
+        SimultaneousGesture(MagnifyGesture(minimumScaleDelta: 0.01), RotateGesture(minimumAngleDelta: .degrees(1)))
             .onChanged { value in
-                pinch = value.first?.magnification ?? 1
-                twist = value.second?.rotation ?? .zero
+                if !transforming {
+                    transforming = true
+                    lifted = false
+                    drag = .zero
+                }
+                let magnification = value.first?.magnification ?? 1
+                if !scaleEngaged, abs(magnification - 1) > Self.scaleDeadZone {
+                    scaleEngaged = true
+                    scaleBase = magnification
+                }
+                pinch = scaleEngaged ? magnification / scaleBase : 1
+
+                let degrees = value.second?.rotation.degrees ?? 0
+                if !rotationEngaged, abs(degrees) > Self.rotationDeadZone {
+                    rotationEngaged = true
+                    rotationBase = degrees
+                }
+                twist = rotationEngaged ? degrees - rotationBase : 0
             }
             .onEnded { _ in
-                commit(scale: liveScale)
+                let finalScale = committedScale * Double(visualPinch)
+                var finalRotation = (savedRotation + twist).truncatingRemainder(dividingBy: 360)
+                // Settle a nearly straight print square, only now that the fingers have lifted.
+                if rotationEngaged, abs(finalRotation) < 3 { finalRotation = 0 }
+                let changed = scaleEngaged || rotationEngaged
                 pinch = 1
-                twist = .zero
+                twist = 0
+                transforming = false
+                scaleEngaged = false
+                rotationEngaged = false
+                if changed { commit(scale: finalScale, rotation: finalRotation) }
             }
-    }
-
-    private func liveCenter(size: CGSize) -> CGPoint {
-        clamped(CGPoint(x: center.x + drag.width, y: center.y + drag.height), size: PrintGeometry.turned(size, degrees: liveRotation))
     }
 
     /// Keeps the print, as turned, on the paper so it never covers the binding or spills off the page.
@@ -441,9 +484,9 @@ private struct CollagePrint: View {
         return CGPoint(x: x, y: max(point.y, size.height / 2))
     }
 
-    private func commit(scale: Double, offset: CGSize = .zero) {
+    private func commit(scale: Double, rotation: Double, offset: CGSize = .zero) {
         var scale = scale
-        var size = PrintGeometry.turned(PrintGeometry.size(of: fragment, height: height(scale)), degrees: liveRotation)
+        var size = PrintGeometry.turned(PrintGeometry.size(of: fragment, height: height(scale)), degrees: rotation)
         // Turning a big print can make it wider than the page; shrink it just enough to fit.
         if size.width > boardWidth {
             let fit = Double(boardWidth / size.width)
@@ -451,7 +494,7 @@ private struct CollagePrint: View {
             size = CGSize(width: size.width * fit, height: size.height * fit)
         }
         let point = clamped(CGPoint(x: center.x + offset.width, y: center.y + offset.height), size: size)
-        onPlace?(point, scale, liveRotation)
+        onPlace?(point, scale, rotation)
     }
 }
 
@@ -460,6 +503,7 @@ enum PrintGeometry {
     static func widthPerHeight(_ fragment: PagePrint) -> CGFloat {
         if fragment.isDrawing { return DrawingPrint.width / DrawingPrint.height }
         if fragment.kind == .note { return 1 }
+        if fragment.kind == .emoji { return EmojiPrint.widthPerHeight(fragment.caption) }
         let shown = CGFloat(min(max(fragment.images.count, 1), 3))
         return shown == 1 ? 1.3 : 0.78 * (1 + 0.62 * (shown - 1))
     }
@@ -526,10 +570,9 @@ private struct StickyNote: View {
     let size: CGSize
 
     private static let side: CGFloat = 200
-    private static let colors: [UInt32] = [0xFFF1A8, 0xFFD6E0, 0xD4F0D8, 0xD6E8FA, 0xFFE2C2]
 
     var body: some View {
-        let paper = Color(rgb: Self.colors[Int(abs(stableAngle(for: print.id, maxDegrees: 1000))) % Self.colors.count])
+        let paper = StickyNoteColor.color(print.noteColor, id: print.id)
         VStack(alignment: .leading, spacing: 8) {
             Text(print.caption)
                 .font(.system(size: 22, design: .serif))
@@ -559,6 +602,65 @@ private struct StickyNote: View {
         .frame(width: size.width, height: size.height, alignment: .topLeading)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("메모, \(print.caption)")
+    }
+}
+
+/// Emoji stuck straight onto the paper, like stickers: no card, just the glyphs with a soft shadow.
+/// Laid out once at a fixed height and scaled, so pinching resizes them crisply.
+private struct EmojiPrint: View {
+    let print: PagePrint
+    let size: CGSize
+
+    static let glyph: CGFloat = 80
+
+    /// Up to four emoji share a row; more wrap to a second row.
+    static func layout(_ text: String) -> (columns: Int, rows: Int) {
+        let count = max(text.count, 1)
+        let columns = min(count, 4)
+        return (columns, (count + columns - 1) / columns)
+    }
+
+    static func widthPerHeight(_ text: String) -> CGFloat {
+        let grid = layout(text)
+        return CGFloat(grid.columns) / CGFloat(grid.rows)
+    }
+
+    var body: some View {
+        let grid = Self.layout(print.caption)
+        let glyphs = Array(print.caption)
+        VStack(spacing: 0) {
+            ForEach(0..<grid.rows, id: \.self) { row in
+                HStack(spacing: 0) {
+                    ForEach(0..<grid.columns, id: \.self) { column in
+                        let index = row * grid.columns + column
+                        Text(index < glyphs.count ? String(glyphs[index]) : "")
+                            .font(.system(size: Self.glyph * 0.82))
+                            .frame(width: Self.glyph, height: Self.glyph)
+                    }
+                }
+            }
+        }
+        .shadow(color: .black.opacity(0.16), radius: 3, y: 2)
+        .scaleEffect(size.height / (Self.glyph * CGFloat(grid.rows)), anchor: .topLeading)
+        .frame(width: size.width, height: size.height, alignment: .topLeading)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("이모지 \(print.caption)")
+    }
+}
+
+/// The sticky-note palette. A memo without a chosen color gets a stable one from its id.
+enum StickyNoteColor {
+    static let all: [(name: String, rgb: UInt32)] = [
+        ("노랑", 0xFFF1A8), ("분홍", 0xFFD6E0), ("연두", 0xD4F0D8), ("하늘", 0xD6E8FA), ("살구", 0xFFE2C2), ("보라", 0xE6DBF7),
+    ]
+
+    static func index(_ chosen: Int?, id: String) -> Int {
+        if let chosen, all.indices.contains(chosen) { return chosen }
+        return Int(abs(stableAngle(for: id, maxDegrees: 1000))) % 5
+    }
+
+    static func color(_ chosen: Int?, id: String) -> Color {
+        Color(rgb: all[index(chosen, id: id)].rgb)
     }
 }
 

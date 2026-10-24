@@ -144,16 +144,18 @@ private struct DayCard: View {
                 .fill(entry.mood?.color ?? Color.hairline)
                 .frame(width: 3)
 
+            // Same order as the notebook page: what's stuck on (photos, drawings, memos, emoji) first, then the words.
             VStack(alignment: .leading, spacing: 10) {
-                if !entry.previewText.isEmpty {
-                    Text(entry.previewText)
+                let stuckOn = MiniPiece.pieces(of: entry)
+                if !stuckOn.isEmpty {
+                    MiniCollage(pieces: stuckOn)
+                }
+                if !previewText.isEmpty {
+                    Text(previewText)
                         .font(entry.quick ? .system(.body, design: .serif) : .subheadline)
                         .foregroundStyle(Color.ink)
                         .lineLimit(3)
                         .multilineTextAlignment(.leading)
-                }
-                if !entry.previewPhotos.isEmpty {
-                    MiniCollage(photos: entry.previewPhotos)
                 }
                 meta
             }
@@ -162,6 +164,14 @@ private struct DayCard: View {
         .padding(14)
         .cardStyle()
         .contentShape(Rectangle())
+    }
+
+    /// The day's own words, not a memo already shown as a sticky note above.
+    private var previewText: String {
+        if !entry.note.isEmpty { return entry.note }
+        let written = entry.fragments.first { ($0.kind == .photos || $0.kind.isQuestion) && !$0.caption.isEmpty }
+        if let written { return written.caption }
+        return entry.fragments.compactMap(\.title).joined(separator: " · ")
     }
 
     private var meta: some View {
@@ -184,17 +194,62 @@ private struct DayCard: View {
     }
 }
 
-/// First photo wider than the rest — an uneven strip rather than a uniform grid.
+/// One small thing stuck on a day's page, for the list's preview strip.
+enum MiniPiece: Hashable {
+    case photo(PhotoRef)
+    case note(String, UInt32)
+    case emoji(String)
+
+    /// In page order, at most four.
+    static func pieces(of entry: DiaryEntry) -> [MiniPiece] {
+        let pieces = entry.fragments.compactMap { fragment -> MiniPiece? in
+            switch fragment.kind {
+            case .drawing: fragment.drawingID.map { .photo(.journal($0)) }
+            case .photos: fragment.photos.first.map(MiniPiece.photo)
+            case .note where !fragment.caption.trimmed.isEmpty:
+                .note(fragment.caption, StickyNoteColor.all[StickyNoteColor.index(fragment.noteColor, id: fragment.id)].rgb)
+            case .emoji where !fragment.caption.isEmpty: .emoji(fragment.caption)
+            default: nil
+            }
+        }
+        return Array(pieces.prefix(4))
+    }
+}
+
+/// The first piece wider than the rest — an uneven strip rather than a uniform grid.
 private struct MiniCollage: View {
-    let photos: [PhotoRef]
+    let pieces: [MiniPiece]
 
     var body: some View {
         HStack(spacing: 6) {
-            ForEach(Array(photos.prefix(3).enumerated()), id: \.element) { index, photo in
-                PhotoRefThumbnail(photo: photo)
-                    .frame(width: index == 0 ? 96 : 60, height: 64)
-                    .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+            ForEach(Array(pieces.enumerated()), id: \.offset) { index, piece in
+                Group {
+                    switch piece {
+                    case .photo(let photo):
+                        PhotoRefThumbnail(photo: photo)
+                    case .note(let text, let rgb):
+                        Text(text)
+                            .font(.system(size: 10, design: .serif))
+                            .foregroundStyle(Color(rgb: 0x3B3029))
+                            .lineLimit(4)
+                            .padding(6)
+                            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+                            .background(Color(rgb: rgb))
+                    case .emoji(let emoji):
+                        Text(emoji)
+                            .font(.system(size: 26))
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.4)
+                            .padding(4)
+                            .frame(maxWidth: .infinity, maxHeight: .infinity)
+                            .background(Color(rgb: 0xFFFDF6))
+                    }
+                }
+                .frame(width: index == 0 ? 96 : 60, height: 64)
+                .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+                .overlay(RoundedRectangle(cornerRadius: 8, style: .continuous).stroke(Color.hairline, lineWidth: 0.5))
             }
         }
+        .accessibilityHidden(true)
     }
 }

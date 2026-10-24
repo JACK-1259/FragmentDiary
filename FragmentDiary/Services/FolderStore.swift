@@ -97,7 +97,8 @@ final class FolderStore {
                 pageY: fragment.pageY,
                 pageScale: fragment.pageScale,
                 pageRotation: fragment.pageRotation,
-                pageZ: fragment.pageZ
+                pageZ: fragment.pageZ,
+                noteColor: fragment.noteColor
             ))
         }
         let post = SharedPost(id: UUID(), authorID: author, day: entry.day, createdAt: .now, mood: entry.mood, note: entry.note, fragments: fragments)

@@ -16,6 +16,7 @@ struct ComposerView<Accessory: View>: View {
     @State private var appeared = false
     @State private var showQuestions = false
     @State private var drawingTarget: DrawingTarget?
+    @State private var emojiTarget: EmojiTarget?
     @Environment(JournalStore.self) private var store
 
     var body: some View {
@@ -63,6 +64,23 @@ struct ComposerView<Accessory: View>: View {
                 drawingTarget = nil
             }
         }
+        .sheet(item: $emojiTarget) { target in
+            EmojiPickerSheet(initial: target.id.flatMap { id in draft.items.first { $0.id == id }?.fragment.caption } ?? "") { emoji in
+                guard emoji != EmojiPickerSheet.unchanged else {
+                    emojiTarget = nil
+                    return
+                }
+                withAnimation(.snappy) {
+                    if let id = target.id, let index = draft.items.firstIndex(where: { $0.id == id }) {
+                        if emoji.isEmpty { draft.remove(id) } else { draft.items[index].fragment.caption = emoji }
+                    } else if !emoji.isEmpty {
+                        _ = draft.addEmoji(emoji)
+                    }
+                }
+                emojiTarget = nil
+            }
+            .presentationDetents([.medium, .large])
+        }
         .sheet(isPresented: $showQuestions) {
             QuestionDeckSheet(draft: draft) { showQuestions = false }
                 .presentationDetents([.large])
@@ -95,9 +113,12 @@ struct ComposerView<Accessory: View>: View {
             ForEach($draft.items.filter { !$0.wrappedValue.fragment.kind.isQuestion }) { $item in
                 let index = draft.items.firstIndex { $0.id == item.id } ?? 0
                 TimelineRow(label: DateText.timelineLabel(for: item.fragment)) {
-                    FragmentCard(item: $item, onRemove: item.isRemovable ? { remove(item.id) } : nil) {
-                        drawingTarget = DrawingTarget(fragment: item.fragment)
-                    }
+                    FragmentCard(
+                        item: $item,
+                        onRemove: item.isRemovable ? { remove(item.id) } : nil,
+                        onOpenDrawing: { drawingTarget = DrawingTarget(fragment: item.fragment) },
+                        onOpenEmoji: { emojiTarget = EmojiTarget(id: item.id) }
+                    )
                 }
                 .opacity(appeared ? 1 : 0)
                 .offset(y: appeared ? 0 : 14)
@@ -118,12 +139,14 @@ struct ComposerView<Accessory: View>: View {
 
     /// Short labels so all three fit on one row, even beside the timeline on the smallest iPhone.
     private var addRow: some View {
-        HStack(spacing: 8) {
+        HStack(spacing: 6) {
             noteButton
             photoButton
             drawButton
+            emojiButton
         }
-        .buttonStyle(ChipButtonStyle())
+        .labelStyle(CompactChipLabelStyle())
+        .buttonStyle(ChipButtonStyle(horizontalPadding: 11))
     }
 
     private var noteButton: some View {
@@ -140,6 +163,14 @@ struct ComposerView<Accessory: View>: View {
             PhotosPicker(selection: $pickedPhotos, maxSelectionCount: 12, matching: .images, photoLibrary: .shared()) {
                 Label("사진", systemImage: "photo.badge.plus")
             }
+        }
+    }
+
+    private var emojiButton: some View {
+        Button {
+            emojiTarget = EmojiTarget(id: nil)
+        } label: {
+            Label("이모지", systemImage: "face.smiling")
         }
     }
 
@@ -250,6 +281,7 @@ private struct KeptFragmentRow: View {
     private var symbol: String {
         switch fragment.kind {
         case .note: "text.quote"
+        case .emoji: "face.smiling"
         case .drawing: "scribble.variable"
         case .photos: "photo"
         case .event: "calendar"
@@ -259,12 +291,61 @@ private struct KeptFragmentRow: View {
 
     private var text: String {
         switch fragment.kind {
-        case .note: fragment.caption
+        case .note, .emoji: fragment.caption
         case .drawing: fragment.caption.isEmpty ? "그림일기" : "그림일기 · \(fragment.caption)"
         case .photos: fragment.caption.isEmpty ? "사진 \(fragment.assetIDs.count)장" : fragment.caption
         case .event, .reminder: JournalPageView.sentence(for: fragment)
         }
     }
+}
+
+/// Picks the sticky-note color a memo will have on the notebook page.
+private struct NoteColorPicker: View {
+    @Binding var fragment: Fragment
+
+    var body: some View {
+        let current = StickyNoteColor.index(fragment.noteColor, id: fragment.id)
+        HStack(spacing: 9) {
+            Image(systemName: "note")
+                .font(.caption)
+                .foregroundStyle(Color.inkMuted)
+                .accessibilityLabel("포스트잇 색")
+            ForEach(StickyNoteColor.all.indices, id: \.self) { index in
+                let isOn = index == current
+                Button {
+                    fragment.noteColor = index
+                } label: {
+                    RoundedRectangle(cornerRadius: 5, style: .continuous)
+                        .fill(Color(rgb: StickyNoteColor.all[index].rgb))
+                        .frame(width: 24, height: 24)
+                        .overlay(RoundedRectangle(cornerRadius: 5, style: .continuous).stroke(Color.black.opacity(0.08), lineWidth: 1))
+                        .overlay(RoundedRectangle(cornerRadius: 7, style: .continuous).stroke(Color.ink, lineWidth: isOn ? 2 : 0).padding(-4))
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("\(StickyNoteColor.all[index].name) 포스트잇")
+                .accessibilityAddTraits(isOn ? .isSelected : [])
+            }
+        }
+        .padding(.leading, 2)
+        .padding(.top, 2)
+    }
+}
+
+/// Icon and word kept tight and on one line, so four chips fit across an iPhone.
+private struct CompactChipLabelStyle: LabelStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        HStack(spacing: 5) {
+            configuration.icon
+            configuration.title
+        }
+        .lineLimit(1)
+        .fixedSize()
+    }
+}
+
+private struct EmojiTarget: Identifiable {
+    /// The fragment being changed, or nil to add a new one.
+    let id: String?
 }
 
 private struct DrawingTarget: Identifiable {
@@ -276,6 +357,7 @@ private struct FragmentCard: View {
     @Binding var item: DraftModel.Item
     var onRemove: (() -> Void)?
     var onOpenDrawing: () -> Void = {}
+    var onOpenEmoji: () -> Void = {}
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -284,7 +366,7 @@ private struct FragmentCard: View {
                 Spacer(minLength: 0)
                 accessory
             }
-            if item.fragment.kind != .note && item.fragment.kind != .drawing && item.included {
+            if ![.note, .drawing, .emoji].contains(item.fragment.kind) && item.included {
                 TextField("한 줄 덧붙이기", text: $item.fragment.caption, axis: .vertical)
                     .font(.subheadline)
                     .lineLimit(1...4)
@@ -332,8 +414,23 @@ private struct FragmentCard: View {
         case .event:
             EventSummary(fragment: item.fragment, isNew: item.isNew)
         case .note:
-            TextField("지금 떠오르는 생각", text: $item.fragment.caption, axis: .vertical)
-                .lineLimit(1...8)
+            VStack(alignment: .leading, spacing: 10) {
+                TextField("지금 떠오르는 생각", text: $item.fragment.caption, axis: .vertical)
+                    .lineLimit(1...8)
+                NoteColorPicker(fragment: $item.fragment)
+            }
+        case .emoji:
+            Button(action: onOpenEmoji) {
+                VStack(alignment: .leading, spacing: 6) {
+                    Text(item.fragment.caption.isEmpty ? "＋" : item.fragment.caption)
+                        .font(.system(size: 40))
+                        .foregroundStyle(Color.inkMuted)
+                    Text("눌러서 이모지 바꾸기")
+                        .font(.caption)
+                        .foregroundStyle(Color.inkMuted)
+                }
+            }
+            .buttonStyle(.plain)
         }
     }
 
