@@ -6,8 +6,21 @@ struct MonthCalendarView: View {
     let entries: [DiaryEntry]
     let onOpen: (DiaryEntry) -> Void
     let onFill: (Date) -> Void
+    /// A book page shows one fixed month and no arrows; the month tabs move between months instead.
+    var showsMonthArrows = true
+    var bare = false
 
-    @State private var month = Calendar.current.dateInterval(of: .month, for: .now)?.start ?? .now
+    @State private var month: Date
+
+    init(entries: [DiaryEntry], month: Date? = nil, showsMonthArrows: Bool = true, bare: Bool = false,
+         onOpen: @escaping (DiaryEntry) -> Void, onFill: @escaping (Date) -> Void) {
+        self.entries = entries
+        self.onOpen = onOpen
+        self.onFill = onFill
+        self.showsMonthArrows = showsMonthArrows
+        self.bare = bare
+        _month = State(initialValue: month ?? Calendar.current.dateInterval(of: .month, for: .now)?.start ?? .now)
+    }
 
     private static let weekdayNames = ["일", "월", "화", "수", "목", "금", "토"]
     private static let cellSize: CGFloat = 38
@@ -49,8 +62,9 @@ struct MonthCalendarView: View {
 
             legend
         }
-        .padding(16)
-        .cardStyle()
+        .padding(bare ? 0 : 16)
+        .background { if !bare { RoundedRectangle(cornerRadius: 18, style: .continuous).fill(Color.card) } }
+        .overlay { if !bare { RoundedRectangle(cornerRadius: 18, style: .continuous).stroke(Color.hairline, lineWidth: 0.5) } }
     }
 
     private func header(written: Int, missed: Int, firstDay: Date?) -> some View {
@@ -59,7 +73,7 @@ struct MonthCalendarView: View {
         return HStack(alignment: .firstTextBaseline) {
             VStack(alignment: .leading, spacing: 3) {
                 Text(DateText.month(month))
-                    .font(.system(.headline, design: .serif))
+                    .font(bare ? .system(size: 30, weight: .bold, design: .serif) : .system(.headline, design: .serif))
                     .foregroundStyle(Color.ink)
                 Text(missed > 0 ? "기록 \(written)일 · 놓친 날 \(missed)일" : "기록 \(written)일")
                     .font(.caption)
@@ -67,9 +81,11 @@ struct MonthCalendarView: View {
                     .contentTransition(.numericText())
             }
             Spacer()
-            HStack(spacing: 4) {
-                monthButton("chevron.left", label: "이전 달", enabled: month > earliest) { shiftMonth(-1) }
-                monthButton("chevron.right", label: "다음 달", enabled: month < current) { shiftMonth(1) }
+            if showsMonthArrows {
+                HStack(spacing: 4) {
+                    monthButton("chevron.left", label: "이전 달", enabled: month > earliest) { shiftMonth(-1) }
+                    monthButton("chevron.right", label: "다음 달", enabled: month < current) { shiftMonth(1) }
+                }
             }
         }
     }

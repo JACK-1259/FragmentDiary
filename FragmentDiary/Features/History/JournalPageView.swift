@@ -406,7 +406,7 @@ private struct CollagePrint: View {
         .padding(-22)
         .position(center)
         .offset(drag)
-        .gesture(move, isEnabled: onPlace != nil)
+        .modifier(HoldToMoveModifier(enabled: onPlace != nil, onChanged: moveChanged, onEnded: moveEnded))
         .modifier(TwoFingerTransformModifier(enabled: onPlace != nil, onChanged: transformChanged, onEnded: transformEnded))
         .zIndex(lifted || transforming ? 1 : 0)
         .animation(.snappy(duration: 0.2), value: lifted)
@@ -422,23 +422,20 @@ private struct CollagePrint: View {
         }
     }
 
-    /// Holding first keeps a plain swipe free to scroll the page.
-    private var move: some Gesture {
-        LongPressGesture(minimumDuration: 0.25)
-            .sequenced(before: DragGesture(minimumDistance: 0, coordinateSpace: .global))
-            .onChanged { value in
-                guard !transforming, case .second(true, let dragValue) = value else { return }
-                lifted = true
-                drag = dragValue?.translation ?? .zero
-            }
-            .onEnded { value in
-                defer {
-                    lifted = false
-                    drag = .zero
-                }
-                guard !transforming, case .second(true, let dragValue) = value, let moved = dragValue?.translation else { return }
-                commit(scale: committedScale, rotation: savedRotation, offset: moved)
-            }
+    /// Holding first keeps a plain swipe free to scroll or turn the page.
+    private func moveChanged(_ translation: CGSize) {
+        guard !transforming else { return }
+        lifted = true
+        drag = translation
+    }
+
+    private func moveEnded(_ translation: CGSize?) {
+        defer {
+            lifted = false
+            drag = .zero
+        }
+        guard !transforming, let translation else { return }
+        commit(scale: committedScale, rotation: savedRotation, offset: translation)
     }
 
     /// Pinch and twist, applied as a pure visual transform while both fingers are down.

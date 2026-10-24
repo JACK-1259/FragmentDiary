@@ -13,12 +13,14 @@ final class TwoFingerTransformRecognizer: UIGestureRecognizer {
     private var pair: [UITouch] = []
     private var startDistance: CGFloat = 0
     private var lastAngle: CGFloat = 0
+    private var soloStart: CGPoint?
 
     override func touchesBegan(_ touches: Set<UITouch>, with event: UIEvent) {
         // A third finger is ignored; only the first two count.
         for touch in touches where pair.count < 2 {
             pair.append(touch)
         }
+        if pair.count == 1, soloStart == nil { soloStart = pair[0].location(in: nil) }
         guard pair.count == 2, state == .possible else { return }
         let (distance, angle) = measure()
         guard distance > 8 else { return }
@@ -30,6 +32,13 @@ final class TwoFingerTransformRecognizer: UIGestureRecognizer {
     }
 
     override func touchesMoved(_ touches: Set<UITouch>, with event: UIEvent) {
+        // A lone finger that travels is a swipe or scroll, not the start of a pinch: let it go to the
+        // page turn or the scroll view instead of holding on until it lifts.
+        if state == .possible, pair.count == 1, let soloStart {
+            let now = pair[0].location(in: nil)
+            if hypot(now.x - soloStart.x, now.y - soloStart.y) > 10 { state = .failed }
+            return
+        }
         guard pair.count == 2, state == .began || state == .changed else { return }
         let (distance, angle) = measure()
         scale = distance / startDistance
@@ -51,6 +60,7 @@ final class TwoFingerTransformRecognizer: UIGestureRecognizer {
 
     override func reset() {
         pair = []
+        soloStart = nil
         scale = 1
         rotation = 0
     }
@@ -117,6 +127,75 @@ struct TwoFingerTransformModifier: ViewModifier {
                         onChanged(value.first?.magnification ?? 1, value.second?.rotation.degrees ?? 0)
                     }
                     .onEnded { _ in onEnded() }
+            )
+        }
+    }
+}
+
+/// Hold, then drag. Built on UIKit's long press so a quick swipe that starts on a print still scrolls
+/// or turns the page; SwiftUI's long press inside a scroll view swallows those swipes.
+final class HoldToMoveRecognizer: UILongPressGestureRecognizer {
+    fileprivate var start: CGPoint = .zero
+
+    fileprivate var translation: CGSize {
+        let now = location(in: nil)
+        return CGSize(width: now.x - start.x, height: now.y - start.y)
+    }
+}
+
+@available(iOS 18.0, *)
+struct HoldToMoveGesture: UIGestureRecognizerRepresentable {
+    let onChanged: (CGSize) -> Void
+    /// The final offset, or nil when the system cancelled the drag.
+    let onEnded: (CGSize?) -> Void
+
+    func makeUIGestureRecognizer(context: Context) -> HoldToMoveRecognizer {
+        let recognizer = HoldToMoveRecognizer()
+        recognizer.minimumPressDuration = 0.25
+        recognizer.allowableMovement = 10
+        return recognizer
+    }
+
+    func handleUIGestureRecognizerAction(_ recognizer: HoldToMoveRecognizer, context: Context) {
+        switch recognizer.state {
+        case .began:
+            recognizer.start = recognizer.location(in: nil)
+            onChanged(.zero)
+        case .changed:
+            onChanged(recognizer.translation)
+        case .ended:
+            onEnded(recognizer.translation)
+        case .cancelled:
+            onEnded(nil)
+        default:
+            break
+        }
+    }
+}
+
+/// Hold-to-move for a print. iOS 17 falls back to SwiftUI's long press and drag.
+struct HoldToMoveModifier: ViewModifier {
+    let enabled: Bool
+    let onChanged: (CGSize) -> Void
+    let onEnded: (CGSize?) -> Void
+
+    func body(content: Content) -> some View {
+        if !enabled {
+            content
+        } else if #available(iOS 18.0, *) {
+            content.gesture(HoldToMoveGesture(onChanged: onChanged, onEnded: onEnded))
+        } else {
+            content.gesture(
+                LongPressGesture(minimumDuration: 0.25)
+                    .sequenced(before: DragGesture(minimumDistance: 0, coordinateSpace: .global))
+                    .onChanged { value in
+                        guard case .second(true, let drag) = value else { return }
+                        onChanged(drag?.translation ?? .zero)
+                    }
+                    .onEnded { value in
+                        guard case .second(true, let drag) = value else { return onEnded(nil) }
+                        onEnded(drag?.translation)
+                    }
             )
         }
     }
