@@ -406,7 +406,8 @@ private struct CollagePrint: View {
         .padding(-22)
         .position(center)
         .offset(drag)
-        .gesture(move.simultaneously(with: transform), isEnabled: onPlace != nil)
+        .gesture(move, isEnabled: onPlace != nil)
+        .modifier(TwoFingerTransformModifier(enabled: onPlace != nil, onChanged: transformChanged, onEnded: transformEnded))
         .zIndex(lifted || transforming ? 1 : 0)
         .animation(.snappy(duration: 0.2), value: lifted)
         .sensoryFeedback(.impact(weight: .light), trigger: lifted) { _, new in new }
@@ -440,42 +441,40 @@ private struct CollagePrint: View {
             }
     }
 
-    /// Pinch and twist as one gesture, applied as a pure visual transform and committed once on lift.
-    private var transform: some Gesture {
-        SimultaneousGesture(MagnifyGesture(minimumScaleDelta: 0.01), RotateGesture(minimumAngleDelta: .degrees(1)))
-            .onChanged { value in
-                if !transforming {
-                    transforming = true
-                    lifted = false
-                    drag = .zero
-                }
-                let magnification = value.first?.magnification ?? 1
-                if !scaleEngaged, abs(magnification - 1) > Self.scaleDeadZone {
-                    scaleEngaged = true
-                    scaleBase = magnification
-                }
-                pinch = scaleEngaged ? magnification / scaleBase : 1
+    /// Pinch and twist, applied as a pure visual transform while both fingers are down.
+    private func transformChanged(magnification: CGFloat, degrees: Double) {
+        if !transforming {
+            transforming = true
+            lifted = false
+            drag = .zero
+        }
+        if !scaleEngaged, abs(magnification - 1) > Self.scaleDeadZone {
+            scaleEngaged = true
+            scaleBase = magnification
+        }
+        pinch = scaleEngaged ? magnification / scaleBase : 1
 
-                let degrees = value.second?.rotation.degrees ?? 0
-                if !rotationEngaged, abs(degrees) > Self.rotationDeadZone {
-                    rotationEngaged = true
-                    rotationBase = degrees
-                }
-                twist = rotationEngaged ? degrees - rotationBase : 0
-            }
-            .onEnded { _ in
-                let finalScale = committedScale * Double(visualPinch)
-                var finalRotation = (savedRotation + twist).truncatingRemainder(dividingBy: 360)
-                // Settle a nearly straight print square, only now that the fingers have lifted.
-                if rotationEngaged, abs(finalRotation) < 3 { finalRotation = 0 }
-                let changed = scaleEngaged || rotationEngaged
-                pinch = 1
-                twist = 0
-                transforming = false
-                scaleEngaged = false
-                rotationEngaged = false
-                if changed { commit(scale: finalScale, rotation: finalRotation) }
-            }
+        if !rotationEngaged, abs(degrees) > Self.rotationDeadZone {
+            rotationEngaged = true
+            rotationBase = degrees
+        }
+        twist = rotationEngaged ? degrees - rotationBase : 0
+    }
+
+    /// Called the moment either finger lifts: the transform is committed once and stops.
+    private func transformEnded() {
+        guard transforming else { return }
+        let finalScale = committedScale * Double(visualPinch)
+        var finalRotation = (savedRotation + twist).truncatingRemainder(dividingBy: 360)
+        // Settle a nearly straight print square, only now that the fingers have lifted.
+        if rotationEngaged, abs(finalRotation) < 3 { finalRotation = 0 }
+        let changed = scaleEngaged || rotationEngaged
+        pinch = 1
+        twist = 0
+        transforming = false
+        scaleEngaged = false
+        rotationEngaged = false
+        if changed { commit(scale: finalScale, rotation: finalRotation) }
     }
 
     /// Keeps the print, as turned, on the paper so it never covers the binding or spills off the page.
