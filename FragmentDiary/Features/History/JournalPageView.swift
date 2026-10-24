@@ -89,8 +89,9 @@ struct ScrapbookPage<Header: View>: View {
             ForEach(Array(lines.enumerated()), id: \.offset) { _, line in
                 HandLine(time: line.time, text: line.text)
             }
+            // The day's own words read the same size whichever way they were written.
             if let trailNote, !trailNote.isEmpty {
-                HandLine(time: nil, text: trailNote)
+                HandLine(time: nil, text: trailNote, large: true)
             }
             // A couple of empty ruled lines so the page reads as paper, not a card.
             ForEach(0..<2, id: \.self) { _ in

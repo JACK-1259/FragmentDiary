@@ -1,7 +1,8 @@
 import SwiftUI
 
-/// The 기록 tab as a diary you leaf through: each month opens on a calendar-and-contents page, followed by
-/// one page per written day. Month index tabs down the right edge jump straight to a month's first page.
+/// The 기록 tab as a diary you leaf through, oldest page first like a real one: each month opens on a
+/// calendar-and-contents page, followed by one page per written day. Month index tabs down the right edge
+/// jump straight to a month's first page. It opens on the current month.
 struct JournalBook: View {
     let entries: [DiaryEntry]
     let summary: String
@@ -16,12 +17,16 @@ struct JournalBook: View {
 
     private var calendar: Calendar { Calendar.current }
 
-    /// Newest month first; the current month is always there so its missed days can be filled.
+    private var currentMonthStart: Date {
+        calendar.dateInterval(of: .month, for: .now)?.start ?? .now
+    }
+
+    /// Oldest month first, days in the order they were lived; the current month is always there so its
+    /// missed days can be filled.
     private var months: [(month: Date, entries: [DiaryEntry])] {
         let grouped = Dictionary(grouping: entries) { calendar.dateInterval(of: .month, for: $0.day)?.start ?? $0.day }
-        let current = calendar.dateInterval(of: .month, for: .now)?.start ?? .now
-        let keys = Set(grouped.keys).union([current]).sorted(by: >)
-        return keys.map { ($0, grouped[$0, default: []].sorted { $0.day > $1.day }) }
+        let keys = Set(grouped.keys).union([currentMonthStart]).sorted()
+        return keys.map { ($0, grouped[$0, default: []].sorted { $0.day < $1.day }) }
     }
 
     private var pages: [BookPage] {
@@ -67,16 +72,15 @@ struct JournalBook: View {
             .frame(maxWidth: .infinity)
         }
         .onAppear {
-            if position == nil { position = pages.first }
+            if position == nil { position = .month(currentMonthStart) }
         }
     }
 
     /// The month the visible page belongs to, for highlighting its tab.
     private var currentMonth: Date? {
-        switch position ?? pages.first {
+        switch position ?? .month(currentMonthStart) {
         case .month(let month): month
         case .day(let id): entries.first { $0.id == id }.flatMap { calendar.dateInterval(of: .month, for: $0.day)?.start }
-        case nil: nil
         }
     }
 
@@ -277,7 +281,7 @@ private struct PageCurl: View {
     }
 }
 
-/// Index tabs sticking out of the book's right edge, newest month on top.
+/// Index tabs sticking out of the book's right edge, oldest month on top.
 private struct MonthTabs: View {
     let months: [Date]
     let current: Date?
@@ -285,7 +289,8 @@ private struct MonthTabs: View {
 
     var body: some View {
         VStack(spacing: 6) {
-            ForEach(Array(months.prefix(8).enumerated()), id: \.element) { index, month in
+            // The latest eight; older months are a swipe back from the first tab.
+            ForEach(Array(months.suffix(8).enumerated()), id: \.element) { index, month in
                 let isOn = month == current
                 Button { onSelect(month) } label: {
                     Text(label(month))
