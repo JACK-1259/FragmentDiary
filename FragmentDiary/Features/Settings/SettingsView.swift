@@ -13,6 +13,9 @@ struct SettingsView: View {
     @State private var confirmErase = false
     @State private var notificationsDenied = false
     @State private var errorText: String?
+    #if DEBUG
+    @State private var sampleStatus: String?
+    #endif
 
     var body: some View {
         @Bindable var lock = lock
@@ -103,6 +106,19 @@ struct SettingsView: View {
                     .font(.subheadline)
                     .foregroundStyle(Color.ink)
 
+                    // Test builds only (simulator and devices); release builds never carry sample data tools.
+                    #if DEBUG
+                    Section {
+                        Button("이번 달 샘플 기록 채우기") { fillSamples() }
+                        Button("샘플 기록 지우기", role: .destructive) { removeSamples() }
+                            .disabled(!SampleJournal.hasSamples)
+                    } header: {
+                        Text("개발용")
+                    } footer: {
+                        Text(sampleStatus ?? "기록 탭을 넘겨 보기 위한 가짜 기록이에요. 이미 쓴 날은 그대로 두고, 지우기는 샘플만 지워요.")
+                    }
+                    #endif
+
                     // A development tool, kept out of device builds so demos show only the real app.
                     #if DEBUG && targetEnvironment(simulator)
                     Section("디버그") {
@@ -163,6 +179,26 @@ struct SettingsView: View {
     private func rescheduleReminders() async {
         await ReminderScheduler.reschedule(today: collector.collect(on: .now))
     }
+
+    #if DEBUG
+    private func fillSamples() {
+        do {
+            let added = try SampleJournal.fill(store)
+            sampleStatus = added == 0 ? "채울 빈 날이 없어요." : "\(added)일을 채웠어요. 기록 탭에서 넘겨 보세요."
+        } catch {
+            errorText = error.localizedDescription
+        }
+    }
+
+    private func removeSamples() {
+        do {
+            let removed = try SampleJournal.remove(store)
+            sampleStatus = "샘플 \(removed)일을 지웠어요."
+        } catch {
+            errorText = error.localizedDescription
+        }
+    }
+    #endif
 
     private func eraseAll() {
         do {
