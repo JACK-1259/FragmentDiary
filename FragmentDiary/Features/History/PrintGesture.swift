@@ -3,7 +3,8 @@ import UIKit
 import UIKit.UIGestureRecognizerSubclass
 
 /// Everything a print on the page responds to, decided from the first touches in one recognizer:
-/// - two fingers down: scale and turn, until either finger lifts;
+/// - two fingers down: scale and turn, until either finger lifts. The second finger may come later,
+///   even after the first has started moving the print — people often rest one finger first;
 /// - one finger held still for a moment: move it, until it lifts;
 /// - one finger that slides right away: not ours, so the page scrolls or turns.
 /// One recognizer, because separate ones wait on each other and the scroll view takes the touch meanwhile.
@@ -12,7 +13,7 @@ final class PrintGestureRecognizer: UIGestureRecognizer {
 
     static let holdDuration: TimeInterval = 0.25
     /// How far a lone finger may drift and still count as holding.
-    static let slop: CGFloat = 10
+    static let slop: CGFloat = 14
 
     private(set) var mode = Mode.none
     /// Scale since both fingers touched down, and the accumulated turn in radians.
@@ -27,29 +28,42 @@ final class PrintGestureRecognizer: UIGestureRecognizer {
     private var lastAngle: CGFloat = 0
 
     override func touchesBegan(_ touches: Set<UITouch>, with event: UIEvent) {
-        // Extra fingers while moving, or a third one while transforming, are ignored.
-        guard mode == .none else { return }
+        // A third finger while transforming is ignored.
+        guard mode != .transform else { return }
         for touch in touches where pair.count < 2 {
             pair.append(touch)
         }
-        guard state == .possible else { return }
-        if pair.count == 1 {
+        if pair.count == 1, state == .possible {
             soloStart = pair[0].location(in: nil)
             perform(#selector(holdElapsed), with: nil, afterDelay: Self.holdDuration)
         } else if pair.count == 2 {
-            cancelHold()
-            let (distance, angle) = measure()
-            guard distance > 8 else { return }
-            startDistance = distance
-            lastAngle = angle
-            mode = .transform
-            state = .began
+            startTransform()
         }
+    }
+
+    /// Both fingers are down: from here on it's scale and turn, whether or not the print was being moved.
+    private func startTransform() {
+        cancelHold()
+        let (distance, angle) = measure()
+        guard distance > 8 else { return }
+        startDistance = distance
+        lastAngle = angle
+        scale = 1
+        rotation = 0
+        translation = .zero
+        let wasMoving = mode == .move
+        mode = .transform
+        state = wasMoving ? .changed : .began
     }
 
     override func touchesMoved(_ touches: Set<UITouch>, with event: UIEvent) {
         switch mode {
         case .none:
+            if pair.count == 2, startDistance == 0 {
+                // Both fingers landed closer than 8pt; start once they've spread.
+                startTransform()
+                return
+            }
             guard pair.count == 1 else { return }
             let now = pair[0].location(in: nil)
             if hypot(now.x - soloStart.x, now.y - soloStart.y) > Self.slop {
@@ -85,6 +99,7 @@ final class PrintGestureRecognizer: UIGestureRecognizer {
         cancelHold()
         pair = []
         mode = .none
+        startDistance = 0
         scale = 1
         rotation = 0
         translation = .zero
