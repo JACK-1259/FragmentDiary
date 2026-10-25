@@ -407,8 +407,9 @@ private struct CollagePrint: View {
         .padding(-22)
         .position(center)
         .offset(drag)
-        .modifier(HoldToMoveModifier(enabled: onPlace != nil, onChanged: moveChanged, onEnded: moveEnded))
-        .modifier(TwoFingerTransformModifier(enabled: onPlace != nil, onChanged: transformChanged, onEnded: transformEnded))
+        .modifier(PrintGesturesModifier(enabled: onPlace != nil, handlers: PrintGestureHandlers(
+            onMove: moveChanged, onMoveEnded: moveEnded, onTransform: transformChanged, onTransformEnded: transformEnded
+        )))
         .zIndex(lifted || transforming ? 1 : 0)
         .animation(.snappy(duration: 0.2), value: lifted)
         .sensoryFeedback(.impact(weight: .light), trigger: lifted) { _, new in new }
