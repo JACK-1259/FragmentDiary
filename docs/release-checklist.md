@@ -34,7 +34,7 @@
 - ☐ 연령 등급 질문 (예상 4+)
 - ☐ 수출 규정(암호화) 질문 답변 — `docs/appstore-listing.md` 참고
 - ☐ 설명·키워드·부제·프로모션 문구 — `docs/appstore-listing.md`에서 붙여 넣기
-- ☐ 스크린샷: iPhone 6.9″, iPad 13″
+- ✅ 스크린샷 준비됨: `docs/appstore-screenshots/` (iPhone 6.9″ 1320×2868 6장, iPad 13″ 2064×2752 2장) → 순서대로 올리기
 - ☐ 앱 아이콘 1024px (에셋에 있음 — 업로드 시 자동 사용)
 
 ## D. TestFlight로 1–2주 써보기 (출시 전 꼭)
