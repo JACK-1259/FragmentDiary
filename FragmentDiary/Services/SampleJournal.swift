@@ -2,8 +2,8 @@
 import PencilKit
 import UIKit
 
-/// Development only: fills this month, up to today, with made-up days so the 기록 book has pages to leaf
-/// through. Days that already have an entry are left alone, and the sample ids are remembered so removing
+/// Development only: fills last month and this month, up to today, with made-up days so the 기록 book has
+/// pages (and a second month) to leaf through. Last month keeps a few blank days, the way a real diary does. Days that already have an entry are left alone, and the sample ids are remembered so removing
 /// takes away exactly these and never a real entry.
 @MainActor
 enum SampleJournal {
@@ -20,14 +20,18 @@ enum SampleJournal {
     static func fill(_ store: JournalStore) throws -> Int {
         let calendar = Calendar.current
         let today = calendar.startOfDay(for: .now)
-        guard let monthStart = calendar.dateInterval(of: .month, for: today)?.start else { return 0 }
+        guard let monthStart = calendar.dateInterval(of: .month, for: today)?.start,
+              let lastMonthStart = calendar.date(byAdding: .month, value: -1, to: monthStart) else { return 0 }
         var ids = storedIDs
         var added = 0
-        var day = monthStart
+        var day = lastMonthStart
         while day <= today {
-            let dayOfMonth = calendar.component(.day, from: day)
-            if store.entry(on: day) == nil {
-                let entry = try makeEntry(on: day, from: templates[(dayOfMonth - 1) % templates.count], store: store)
+            let index = calendar.component(.day, from: day) - 1
+            let template = day < monthStart
+                ? lastMonthTemplates[index % lastMonthTemplates.count]
+                : templates[index % templates.count]
+            if let template, store.entry(on: day) == nil {
+                let entry = try makeEntry(on: day, from: template, store: store)
                 try store.save(entry)
                 ids.append(entry.id.uuidString)
                 added += 1
@@ -73,7 +77,104 @@ enum SampleJournal {
         }
     }
 
-    /// One per day of the month (October 2026 starts on a Thursday), so a date always gets the same page.
+    /// Last month, one per day (September 2026 starts on a Tuesday, 추석 falls on the 25th); nil days stay blank.
+    private static let lastMonthTemplates: [Template?] = [
+        Template(mood: .good, note: "9월 시작, 아침 공기가 선선해졌다", pieces: [
+            .photo(.sky, caption: "출근길 구름이 예뻤다", hour: 8),
+            .emoji("🍃☁️"),
+        ]),
+        Template(mood: .calm, note: "평범한 수요일", quick: true, pieces: [
+            .event("팀 점심", place: "사내 식당", hour: 12, reaction: "🙂 무난했어"),
+        ]),
+        nil,
+        Template(mood: .bright, note: "불금! 동료들이랑 치맥", pieces: [
+            .event("동료들이랑 치맥", place: "회사 앞 호프", hour: 19, reaction: "🍻 즐거웠어", answer: "다음 주에 또 가기로 했다"),
+            .emoji("🍗🍺"),
+        ]),
+        Template(mood: .good, note: "오랜만에 대청소", pieces: [
+            .reminder("대청소", hour: 11, reaction: "✨ 개운해"),
+            .drawing(.plant, caption: "베란다 정리", weather: .sunny),
+        ]),
+        Template(mood: .calm, note: "카페에서 책 읽은 일요일", pieces: [
+            .photo(.cafe, caption: "단골 카페 창가", hour: 15),
+            .memo("다 읽은 책: 작별하지 않는다", hour: 17, color: 5),
+        ]),
+        Template(mood: .low, note: "주말이 너무 짧다", quick: true, pieces: [
+            .emoji("😮‍💨☕️"),
+        ]),
+        Template(mood: .calm, note: "회의가 길어져서 늦게 퇴근", pieces: [
+            .event("프로젝트 회의", place: "대회의실", hour: 16, reaction: "😐 길었어"),
+        ]),
+        nil,
+        Template(mood: .good, note: "요가 다시 시작!", pieces: [
+            .event("요가 클래스", place: nil, hour: 19, reaction: "💪 개운해"),
+            .memo("화·목 요가 등록 완료", hour: 21, color: 2),
+        ]),
+        Template(mood: .bright, note: "친구 청첩장 모임", pieces: [
+            .photo(.cake, caption: "축하 케이크", hour: 19),
+            .emoji("💐💍🥂"),
+        ]),
+        Template(mood: .good, note: "한강에서 피크닉", pieces: [
+            .photo(.river, caption: "돗자리 펴고 낮잠", hour: 14),
+            .drawing(.bike, caption: "자전거도 탔다", weather: .sunny),
+        ]),
+        Template(mood: .calm, note: "빨래하고 장 보고, 다음 주 준비", quick: true, pieces: [
+            .reminder("장보기", hour: 16, reaction: "😌 후련해"),
+        ]),
+        Template(mood: .heavy, note: "아무것도 하기 싫은 날", quick: true, pieces: [
+            .emoji("🛌"),
+        ]),
+        Template(mood: .low, note: "비가 하루 종일 왔다", pieces: [
+            .drawing(.rain, caption: "비 오는 화요일", weather: .rainy),
+        ]),
+        nil,
+        Template(mood: .good, note: "발표 무사히 끝!", pieces: [
+            .event("분기 발표", place: "대회의실", hour: 14, reaction: "😌 후련해", answer: "질문에도 잘 답했다"),
+            .memo("발표 자료 공유하기", hour: 17, color: 3),
+        ]),
+        Template(mood: .bright, note: "회사 앞에서 고양이를 만났다", pieces: [
+            .drawing(.cat, caption: "고등어 고양이", weather: .sunny),
+            .emoji("🐈✨"),
+        ]),
+        Template(mood: .good, note: "가을 옷 쇼핑하고 공원 산책", pieces: [
+            .photo(.park, caption: "벌써 물드는 나무", hour: 16),
+            .memo("니트 하나 샀다", hour: 18, color: 1),
+        ]),
+        Template(mood: .calm, note: "늦잠 자고 영화 한 편", pieces: [
+            .emoji("🎬🍿🛋️"),
+        ]),
+        nil,
+        Template(mood: .calm, note: "추석 선물 주문 완료", pieces: [
+            .reminder("추석 선물 주문", hour: 20, reaction: "🎁 완료"),
+        ]),
+        Template(mood: .good, note: "연휴 전날, 일찍 퇴근", pieces: [
+            .photo(.sunset, caption: "퇴근길 노을", hour: 18),
+        ]),
+        Template(mood: .bright, note: "추석 연휴 시작! 고향 가는 길", pieces: [
+            .memo("기차 7시 출발, 3호차", hour: 7, color: 0),
+            .emoji("🚄🌕"),
+        ]),
+        Template(mood: .bright, note: "추석, 가족이랑 송편 빚었다", pieces: [
+            .event("가족 모임", place: "본가", hour: 12, reaction: "🥰 즐거웠어", answer: "송편 모양은 내가 제일 예뻤다"),
+            .drawing(.moon, caption: "보름달 소원", weather: .cloudy),
+        ]),
+        Template(mood: .good, note: "연휴 마지막 날, 푹 쉬었다", quick: true, pieces: [
+            .emoji("😴🍂"),
+        ]),
+        Template(mood: .calm, note: "다음 주 준비하는 일요일", pieces: [
+            .memo("월요일 회의 자료 확인", hour: 21, color: 4),
+        ]),
+        Template(mood: .low, note: "연휴 후유증", quick: true, pieces: [
+            .emoji("🥱"),
+        ]),
+        nil,
+        Template(mood: .good, note: "9월 마지막 날, 한 달 돌아보기", pieces: [
+            .memo("9월: 요가 6번, 책 2권", hour: 22, color: 5),
+            .photo(.night, caption: "야경 보며 퇴근", hour: 21),
+        ]),
+    ]
+
+    /// This month, one per day (October 2026 starts on a Thursday), so a date always gets the same page.
     private static let templates: [Template] = [
         Template(mood: .good, note: "10월의 첫날, 공기가 확 달라졌다", pieces: [
             .photo(.sky, caption: "출근길 하늘이 너무 파랬다", hour: 8),

@@ -109,7 +109,7 @@ struct SettingsView: View {
                     // Test builds only (simulator and devices); release builds never carry sample data tools.
                     #if DEBUG
                     Section {
-                        Button("이번 달 샘플 기록 채우기") { fillSamples() }
+                        Button("샘플 기록 채우기 (지난달부터 오늘까지)") { fillSamples() }
                         Button("샘플 기록 지우기", role: .destructive) { removeSamples() }
                             .disabled(!SampleJournal.hasSamples)
                     } header: {
