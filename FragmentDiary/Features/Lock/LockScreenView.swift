@@ -9,6 +9,9 @@ struct LockScreenView: View {
     @State private var autoAttempted = false
     @State private var isAuthenticating = false
     @State private var errorText: String?
+    /// The journal's files are here but their key isn't (e.g. restored from a backup without the keychain).
+    @State private var keyMissing = false
+    @State private var confirmFreshStart = false
 
     var body: some View {
         VStack(spacing: 16) {
@@ -29,23 +32,27 @@ struct LockScreenView: View {
                     .foregroundStyle(.red)
                     .multilineTextAlignment(.center)
             }
-            if lock.isEffective {
+            if keyMissing {
+                Button("새 일기장으로 시작하기") { confirmFreshStart = true }
+                    .buttonStyle(PrimaryButtonStyle())
+                    .confirmationDialog("새 일기장으로 시작할까요?", isPresented: $confirmFreshStart, titleVisibility: .visible) {
+                        Button("새로 시작하기") { startFresh() }
+                        Button("취소", role: .cancel) {}
+                    } message: {
+                        Text("이 기기에서 열 수 없는 기록은 지우지 않고 따로 보관해 둬요. 지금 일기장은 빈 상태로 시작해요.")
+                    }
+            } else {
                 Button {
                     Task { await unlock() }
                 } label: {
-                    Label("\(lock.methodName)로 열기", systemImage: lock.symbolName)
+                    if lock.isEffective {
+                        Label("\(lock.methodName)로 열기", systemImage: lock.symbolName)
+                    } else {
+                        Label("열기", systemImage: "book.closed")
+                    }
                 }
                 .buttonStyle(PrimaryButtonStyle())
                 .disabled(isAuthenticating)
-                // The simulator's Face ID is awkward to drive, so only there can the lock be skipped.
-                #if DEBUG && targetEnvironment(simulator)
-                Button("잠금 건너뛰기 (시뮬레이터 전용)") {
-                    Task { await unlock(skipBiometrics: true) }
-                }
-                .font(.footnote)
-                .foregroundStyle(Color.inkMuted)
-                .padding(.top, 4)
-                #endif
             }
         }
         .padding(24)
@@ -71,13 +78,13 @@ struct LockScreenView: View {
         await unlock()
     }
 
-    private func unlock(skipBiometrics: Bool = false) async {
+    private func unlock() async {
         guard !isAuthenticating else { return }
         isAuthenticating = true
         defer { isAuthenticating = false }
 
         lock.refreshAvailability()
-        if lock.isEffective && !skipBiometrics {
+        if lock.isEffective {
             guard await lock.authenticate() else { return }
         }
         do {
@@ -85,9 +92,26 @@ struct LockScreenView: View {
             // Folders first: RootView reveals the app as soon as the journal reports unlocked.
             try folderStore.unlock(key: key)
             try store.unlock(key: key)
+            SampleCleanup.run(store)
             errorText = nil
+            keyMissing = false
+        } catch KeyVault.VaultError.keyMissingForExistingJournal {
+            keyMissing = true
+            errorText = "이 기기에서 기록을 여는 열쇠를 찾지 못했어요.\n기기를 백업에서 복원했다면, 암호화된 백업이나 iCloud 백업으로 복원해야 기록이 함께 열려요."
         } catch {
             errorText = "기록을 여는 중 문제가 생겼어요.\n\(error.localizedDescription)"
+        }
+    }
+
+    /// Moves the unreadable files aside (never deletes them) and opens an empty journal with a new key.
+    private func startFresh() {
+        do {
+            try JournalFiles.setAsideUnreadable()
+            keyMissing = false
+            errorText = nil
+            Task { await unlock() }
+        } catch {
+            errorText = "새로 시작하지 못했어요.\n\(error.localizedDescription)"
         }
     }
 }

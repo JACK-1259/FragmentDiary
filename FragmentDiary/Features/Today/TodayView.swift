@@ -118,9 +118,6 @@ struct TodayView: View {
     }
 
     private func refresh() {
-        #if DEBUG
-        DebugSeeder.seedIfRequested()
-        #endif
         collector.refreshStatus()
         collected = collector.collect(on: .now)
         let entry = store.entry(on: .now)

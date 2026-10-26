@@ -55,9 +55,6 @@ struct RootView: View {
         .animation(.easeInOut(duration: 0.25), value: store.isUnlocked)
         .animation(.easeInOut(duration: 0.3), value: onboarded)
         .onAppear(perform: applyWindowTint)
-        #if DEBUG
-        .task { await DebugSeeder.removeSampleDataIfRequested() }
-        #endif
         .onChange(of: themeValue) {
             applyWindowTint()
             WidgetCenter.shared.reloadAllTimelines()
@@ -96,9 +93,11 @@ struct MainTabView: View {
             HistoryView()
                 .tabItem { Label("기록", systemImage: "book.closed") }
                 .tag(MainTab.history)
-            FoldersView()
-                .tabItem { Label("함께", systemImage: "person.2") }
-                .tag(MainTab.together)
+            if ReleaseFeatures.sharedFolders {
+                FoldersView()
+                    .tabItem { Label("함께", systemImage: "person.2") }
+                    .tag(MainTab.together)
+            }
             SettingsView()
                 .tabItem { Label("설정", systemImage: "gearshape") }
                 .tag(MainTab.settings)

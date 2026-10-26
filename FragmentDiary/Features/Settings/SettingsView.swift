@@ -13,9 +13,6 @@ struct SettingsView: View {
     @State private var confirmErase = false
     @State private var notificationsDenied = false
     @State private var errorText: String?
-    #if DEBUG
-    @State private var sampleStatus: String?
-    #endif
 
     var body: some View {
         @Bindable var lock = lock
@@ -75,12 +72,14 @@ struct SettingsView: View {
                                 : "예: 오늘 일정 2개와 끝낸 일 1개가 있었어요. 이미 기록한 날엔 울리지 않아요.")
                     }
 
-                    Section {
-                        TextField("폴더에서 보일 내 이름", text: $displayName)
-                    } header: {
-                        Text("함께 쓰는 폴더")
-                    } footer: {
-                        Text("이미 만든 폴더의 이름 표시는 바뀌지 않아요. 동기화 연결 전까지 폴더 기록은 이 기기에만 저장돼요.")
+                    if ReleaseFeatures.sharedFolders {
+                        Section {
+                            TextField("폴더에서 보일 내 이름", text: $displayName)
+                        } header: {
+                            Text("함께 쓰는 폴더")
+                        } footer: {
+                            Text("이미 만든 폴더의 이름 표시는 바뀌지 않아요. 동기화 연결 전까지 폴더 기록은 이 기기에만 저장돼요.")
+                        }
                     }
 
                     Section {
@@ -98,33 +97,17 @@ struct SettingsView: View {
                     }
 
                     Section {
-                        Label("계정, 서버, 분석 도구 없음", systemImage: "wifi.slash")
-                        Label("모든 기록은 AES-256으로 암호화돼 이 기기에만 저장돼요", systemImage: "lock.doc")
+                        Group {
+                            Label("계정, 서버, 분석 도구 없음", systemImage: "wifi.slash")
+                            Label("모든 기록은 AES-256으로 암호화돼 이 기기에만 저장돼요", systemImage: "lock.doc")
+                        }
+                        .font(.subheadline)
+                        .foregroundStyle(Color.ink)
                     } header: {
                         Text("조각일기의 약속")
-                    }
-                    .font(.subheadline)
-                    .foregroundStyle(Color.ink)
-
-                    // Test builds only (simulator and devices); release builds never carry sample data tools.
-                    #if DEBUG
-                    Section {
-                        Button("샘플 기록 채우기 (지난달부터 오늘까지)") { fillSamples() }
-                        Button("샘플 기록 지우기", role: .destructive) { removeSamples() }
-                            .disabled(!SampleJournal.hasSamples)
-                    } header: {
-                        Text("개발용")
                     } footer: {
-                        Text(sampleStatus ?? "기록 탭을 넘겨 보기 위한 가짜 기록이에요. 이미 쓴 날은 그대로 두고, 지우기는 샘플만 지워요.")
+                        Text("폰을 바꿀 땐 iCloud 백업이나 암호화된 컴퓨터 백업에서 복원하면 기록도 함께 돌아와요.")
                     }
-                    #endif
-
-                    // A development tool, kept out of device builds so demos show only the real app.
-                    #if DEBUG && targetEnvironment(simulator)
-                    Section("디버그") {
-                        NavigationLink("위젯 미리보기") { WidgetPreviewView() }
-                    }
-                    #endif
                 }
                 .listRowBackground(Color.card)
             }
@@ -150,7 +133,9 @@ struct SettingsView: View {
             .confirmationDialog("모든 기록을 삭제할까요?", isPresented: $confirmErase, titleVisibility: .visible) {
                 Button("모두 삭제", role: .destructive) { eraseAll() }
             } message: {
-                Text("개인 일기와 함께 쓰는 폴더의 기록이 모두 지워지고, 암호화 키까지 파기돼서 되돌릴 수 없어요.")
+                Text(ReleaseFeatures.sharedFolders
+                    ? "개인 일기와 함께 쓰는 폴더의 기록이 모두 지워지고, 암호화 키까지 파기돼서 되돌릴 수 없어요."
+                    : "모든 기록이 지워지고, 암호화 키까지 파기돼서 되돌릴 수 없어요.")
             }
             .alert("알림이 꺼져 있어요", isPresented: $notificationsDenied) {
                 Button("설정 열기") { openSystemSettings() }
@@ -179,26 +164,6 @@ struct SettingsView: View {
     private func rescheduleReminders() async {
         await ReminderScheduler.reschedule(today: collector.collect(on: .now))
     }
-
-    #if DEBUG
-    private func fillSamples() {
-        do {
-            let added = try SampleJournal.fill(store)
-            sampleStatus = added == 0 ? "채울 빈 날이 없어요." : "\(added)일을 채웠어요. 기록 탭에서 넘겨 보세요."
-        } catch {
-            errorText = error.localizedDescription
-        }
-    }
-
-    private func removeSamples() {
-        do {
-            let removed = try SampleJournal.remove(store)
-            sampleStatus = "샘플 \(removed)일을 지웠어요."
-        } catch {
-            errorText = error.localizedDescription
-        }
-    }
-    #endif
 
     private func eraseAll() {
         do {

@@ -72,10 +72,28 @@ enum KeyVault {
 
 /// The sealed files that need the vault key to open.
 enum JournalFiles {
+    private static let sealedNames = ["journal.sealed", "folders.sealed"]
+    private static let allNames = sealedNames + ["JournalAttachments", "Attachments"]
+
     static var anyExist: Bool {
         let support = URL.applicationSupportDirectory
-        return ["journal.sealed", "folders.sealed"].contains { name in
+        return sealedNames.contains { name in
             FileManager.default.fileExists(atPath: support.appending(path: name).path(percentEncoded: false))
+        }
+    }
+
+    /// When the key is gone for good, the old files move into "Unreadable <date>" instead of being deleted, so a
+    /// later restore of the key could still open them. The journal then starts empty with a new key.
+    static func setAsideUnreadable() throws {
+        let manager = FileManager.default
+        let support = URL.applicationSupportDirectory
+        let stamp = ISO8601DateFormatter().string(from: .now).replacingOccurrences(of: ":", with: "-")
+        let shelf = support.appending(path: "Unreadable \(stamp)", directoryHint: .isDirectory)
+        try manager.createDirectory(at: shelf, withIntermediateDirectories: true)
+        for name in allNames {
+            let source = support.appending(path: name)
+            guard manager.fileExists(atPath: source.path(percentEncoded: false)) else { continue }
+            try manager.moveItem(at: source, to: shelf.appending(path: name))
         }
     }
 }
