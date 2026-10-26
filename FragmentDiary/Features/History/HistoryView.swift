@@ -51,11 +51,9 @@ struct HistoryView: View {
         }
     }
 
-    /// "기록한 날 24 · 이번 달 18 · 5일 이어가는 중", under each month's calendar.
+    /// "기록한 날 51", under each month's calendar; the calendar itself already counts that month's days.
     private var summary: String {
-        var parts = ["기록한 날 \(store.entries.count)", "이번 달 \(store.daysThisMonth)"]
-        if store.streak >= 2 { parts.append("\(store.streak)일 이어가는 중") }
-        return parts.joined(separator: " · ")
+        "기록한 날 \(store.entries.count)"
     }
 
     private var emptyState: some View {

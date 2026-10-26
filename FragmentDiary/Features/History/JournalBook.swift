@@ -2,17 +2,14 @@ import SwiftUI
 
 /// The 기록 tab as a diary you leaf through, oldest page first like a real one: each month opens on a
 /// calendar-and-contents page, followed by one page per written day. Month index tabs down the right edge
-/// jump straight to a month's first page, and a strip of dates above the tab bar jumps to any day (its calendar
-/// button opens a month view for days further away). It opens on the current month.
+/// jump straight to a month's first page, and a strip of dates above the tab bar jumps to any day. It opens on
+/// the current month.
 struct JournalBook: View {
     let entries: [DiaryEntry]
     let summary: String
     let onFill: (Date) -> Void
 
     @State private var position: BookPage?
-    @State private var showsCalendar = false
-    /// A missed day picked in the calendar sheet; filled once the sheet has gone, so two sheets never overlap.
-    @State private var pendingFill: Date?
 
     enum BookPage: Hashable {
         case month(Date)
@@ -78,22 +75,6 @@ struct JournalBook: View {
         .safeAreaInset(edge: .bottom, spacing: 0) {
             DayStrip(months: months, current: position ?? .month(currentMonthStart)) { id in
                 withAnimation(.snappy) { position = .day(id) }
-            } onCalendar: {
-                showsCalendar = true
-            }
-        }
-        .sheet(isPresented: $showsCalendar, onDismiss: {
-            if let day = pendingFill {
-                pendingFill = nil
-                onFill(day)
-            }
-        }) {
-            CalendarJumpSheet(entries: entries, month: currentMonth ?? currentMonthStart) { entry in
-                showsCalendar = false
-                withAnimation(.snappy) { position = .day(entry.id) }
-            } onFill: { day in
-                pendingFill = day
-                showsCalendar = false
             }
         }
         .onAppear {
@@ -306,55 +287,37 @@ private struct PageCurl: View {
     }
 }
 
-/// Every written day in a row above the tab bar, scrolled to keep the open page in view. The calendar button in
-/// front opens a month view for jumping further.
+/// Every written day in a row above the tab bar, scrolled to keep the open page in view.
 private struct DayStrip: View {
     let months: [(month: Date, entries: [DiaryEntry])]
     let current: JournalBook.BookPage
     let onSelect: (UUID) -> Void
-    let onCalendar: () -> Void
 
     var body: some View {
-        HStack(spacing: 8) {
-            Button(action: onCalendar) {
-                Image(systemName: "calendar")
-                    .font(.title3)
-                    .foregroundStyle(Color.ink)
-                    .frame(width: 44, height: 54)
-                    .background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(Color.card))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 14, style: .continuous)
-                            .strokeBorder(Color.inkMuted.opacity(0.5), style: StrokeStyle(lineWidth: 1, dash: [4, 3]))
-                    )
-            }
-            .buttonStyle(.plain)
-            .accessibilityLabel("달력에서 날짜 고르기")
-
-            ScrollViewReader { proxy in
-                ScrollView(.horizontal) {
-                    LazyHStack(spacing: 6) {
-                        ForEach(months, id: \.month) { group in
-                            if !group.entries.isEmpty {
-                                Text("\(Calendar.current.component(.month, from: group.month))월")
-                                    .font(.caption2.weight(.heavy))
-                                    .foregroundStyle(Color.inkMuted)
-                                    .padding(.horizontal, 2)
-                                    .id(group.month)
-                                ForEach(group.entries) { entry in
-                                    chip(entry).id(entry.id)
-                                }
+        ScrollViewReader { proxy in
+            ScrollView(.horizontal) {
+                LazyHStack(spacing: 6) {
+                    ForEach(months, id: \.month) { group in
+                        if !group.entries.isEmpty {
+                            Text("\(Calendar.current.component(.month, from: group.month))월")
+                                .font(.caption2.weight(.heavy))
+                                .foregroundStyle(Color.inkMuted)
+                                .padding(.horizontal, 2)
+                                .id(group.month)
+                            ForEach(group.entries) { entry in
+                                chip(entry).id(entry.id)
                             }
                         }
                     }
-                    .padding(.vertical, 5)
-                    .padding(.trailing, 4)
                 }
-                .scrollIndicators(.hidden)
-                // A horizontal scroll view is greedy vertically; pin it to the chips' height.
-                .frame(height: 66)
-                .onAppear { reveal(in: proxy, animated: false) }
-                .onChange(of: current) { reveal(in: proxy, animated: true) }
+                .padding(.vertical, 5)
+                .padding(.trailing, 4)
             }
+            .scrollIndicators(.hidden)
+            // A horizontal scroll view is greedy vertically; pin it to the chips' height.
+            .frame(height: 66)
+            .onAppear { reveal(in: proxy, animated: false) }
+            .onChange(of: current) { reveal(in: proxy, animated: true) }
         }
         .padding(.horizontal, 14)
         .padding(.top, 8)
@@ -411,35 +374,6 @@ private struct DayStrip: View {
         } else {
             proxy.scrollTo(target, anchor: .center)
         }
-    }
-}
-
-/// The month calendar in a sheet: a written day opens its page, a missed day starts filling it in.
-private struct CalendarJumpSheet: View {
-    let entries: [DiaryEntry]
-    let month: Date
-    let onOpen: (DiaryEntry) -> Void
-    let onFill: (Date) -> Void
-
-    @Environment(\.dismiss) private var dismiss
-
-    var body: some View {
-        NavigationStack {
-            ScrollView {
-                MonthCalendarView(entries: entries, month: month, onOpen: onOpen, onFill: onFill)
-                    .padding(20)
-                    .readableColumn()
-            }
-            .background(Color.paper)
-            .navigationTitle("날짜로 가기")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("닫기") { dismiss() }
-                }
-            }
-        }
-        .presentationDetents([.fraction(0.68), .large])
     }
 }
 
