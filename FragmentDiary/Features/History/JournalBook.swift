@@ -2,13 +2,17 @@ import SwiftUI
 
 /// The 기록 tab as a diary you leaf through, oldest page first like a real one: each month opens on a
 /// calendar-and-contents page, followed by one page per written day. Month index tabs down the right edge
-/// jump straight to a month's first page. It opens on the current month.
+/// jump straight to a month's first page, and a strip of dates above the tab bar jumps to any day (its calendar
+/// button opens a month view for days further away). It opens on the current month.
 struct JournalBook: View {
     let entries: [DiaryEntry]
     let summary: String
     let onFill: (Date) -> Void
 
     @State private var position: BookPage?
+    @State private var showsCalendar = false
+    /// A missed day picked in the calendar sheet; filled once the sheet has gone, so two sheets never overlap.
+    @State private var pendingFill: Date?
 
     enum BookPage: Hashable {
         case month(Date)
@@ -70,6 +74,27 @@ struct JournalBook: View {
             .padding(.top, 36)
             .frame(maxWidth: BookLayout.column, alignment: .trailing)
             .frame(maxWidth: .infinity)
+        }
+        .safeAreaInset(edge: .bottom, spacing: 0) {
+            DayStrip(months: months, current: position ?? .month(currentMonthStart)) { id in
+                withAnimation(.snappy) { position = .day(id) }
+            } onCalendar: {
+                showsCalendar = true
+            }
+        }
+        .sheet(isPresented: $showsCalendar, onDismiss: {
+            if let day = pendingFill {
+                pendingFill = nil
+                onFill(day)
+            }
+        }) {
+            CalendarJumpSheet(entries: entries, month: currentMonth ?? currentMonthStart) { entry in
+                showsCalendar = false
+                withAnimation(.snappy) { position = .day(entry.id) }
+            } onFill: { day in
+                pendingFill = day
+                showsCalendar = false
+            }
         }
         .onAppear {
             if position == nil { position = .month(currentMonthStart) }
@@ -278,6 +303,143 @@ private struct PageCurl: View {
         .frame(width: 44, height: 44)
         .allowsHitTesting(false)
         .accessibilityHidden(true)
+    }
+}
+
+/// Every written day in a row above the tab bar, scrolled to keep the open page in view. The calendar button in
+/// front opens a month view for jumping further.
+private struct DayStrip: View {
+    let months: [(month: Date, entries: [DiaryEntry])]
+    let current: JournalBook.BookPage
+    let onSelect: (UUID) -> Void
+    let onCalendar: () -> Void
+
+    var body: some View {
+        HStack(spacing: 8) {
+            Button(action: onCalendar) {
+                Image(systemName: "calendar")
+                    .font(.title3)
+                    .foregroundStyle(Color.ink)
+                    .frame(width: 44, height: 54)
+                    .background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(Color.card))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 14, style: .continuous)
+                            .strokeBorder(Color.inkMuted.opacity(0.5), style: StrokeStyle(lineWidth: 1, dash: [4, 3]))
+                    )
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("달력에서 날짜 고르기")
+
+            ScrollViewReader { proxy in
+                ScrollView(.horizontal) {
+                    LazyHStack(spacing: 6) {
+                        ForEach(months, id: \.month) { group in
+                            if !group.entries.isEmpty {
+                                Text("\(Calendar.current.component(.month, from: group.month))월")
+                                    .font(.caption2.weight(.heavy))
+                                    .foregroundStyle(Color.inkMuted)
+                                    .padding(.horizontal, 2)
+                                    .id(group.month)
+                                ForEach(group.entries) { entry in
+                                    chip(entry).id(entry.id)
+                                }
+                            }
+                        }
+                    }
+                    .padding(.vertical, 5)
+                    .padding(.trailing, 4)
+                }
+                .scrollIndicators(.hidden)
+                // A horizontal scroll view is greedy vertically; pin it to the chips' height.
+                .frame(height: 66)
+                .onAppear { reveal(in: proxy, animated: false) }
+                .onChange(of: current) { reveal(in: proxy, animated: true) }
+            }
+        }
+        .padding(.horizontal, 14)
+        .padding(.top, 8)
+        .padding(.bottom, 6)
+        .frame(maxWidth: BookLayout.column)
+        .frame(maxWidth: .infinity)
+        .background {
+            LinearGradient(stops: [.init(color: Color.paper.opacity(0), location: 0), .init(color: Color.paper, location: 0.14)],
+                           startPoint: .top, endPoint: .bottom)
+                .ignoresSafeArea(edges: .bottom)
+        }
+    }
+
+    private func chip(_ entry: DiaryEntry) -> some View {
+        let isOn = current == .day(entry.id)
+        return Button { onSelect(entry.id) } label: {
+            VStack(spacing: 3) {
+                Text(DateText.dayNumber(entry.day))
+                    .font(.system(size: 15, weight: .bold))
+                Text(DateText.shortWeekday(entry.day))
+                    .font(.system(size: 10))
+                    .foregroundStyle(isOn ? Color.white.opacity(0.8) : Color.inkMuted)
+                Circle()
+                    .fill(entry.mood?.color ?? Color.hairline)
+                    .overlay(Circle().stroke(Color.white.opacity(isOn ? 0.9 : 0), lineWidth: 1))
+                    .frame(width: 6, height: 6)
+            }
+            .foregroundStyle(isOn ? Color.white : Color.ink)
+            .frame(width: 40, height: 54)
+            .background(
+                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    .fill(isOn ? AnyShapeStyle(.tint) : AnyShapeStyle(Color.card))
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    .stroke(Color.hairline, lineWidth: isOn ? 0 : 1)
+            )
+            .offset(y: isOn ? -3 : 0)
+            .animation(.snappy(duration: 0.2), value: isOn)
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(DateText.full(entry.day))
+        .accessibilityAddTraits(isOn ? .isSelected : [])
+    }
+
+    /// Keeps the open day (or, on a month's first page, that month's label) in the middle of the strip.
+    private func reveal(in proxy: ScrollViewProxy, animated: Bool) {
+        let target: AnyHashable = switch current {
+        case .day(let id): AnyHashable(id)
+        case .month(let month): AnyHashable(month)
+        }
+        if animated {
+            withAnimation(.snappy) { proxy.scrollTo(target, anchor: .center) }
+        } else {
+            proxy.scrollTo(target, anchor: .center)
+        }
+    }
+}
+
+/// The month calendar in a sheet: a written day opens its page, a missed day starts filling it in.
+private struct CalendarJumpSheet: View {
+    let entries: [DiaryEntry]
+    let month: Date
+    let onOpen: (DiaryEntry) -> Void
+    let onFill: (Date) -> Void
+
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        NavigationStack {
+            ScrollView {
+                MonthCalendarView(entries: entries, month: month, onOpen: onOpen, onFill: onFill)
+                    .padding(20)
+                    .readableColumn()
+            }
+            .background(Color.paper)
+            .navigationTitle("날짜로 가기")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("닫기") { dismiss() }
+                }
+            }
+        }
+        .presentationDetents([.fraction(0.68), .large])
     }
 }
 
