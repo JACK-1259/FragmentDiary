@@ -316,6 +316,14 @@ private struct DayStrip: View {
             .scrollIndicators(.hidden)
             // A horizontal scroll view is greedy vertically; pin it to the chips' height.
             .frame(height: 66)
+            // Chips fade out at both ends instead of being cut off.
+            .mask {
+                HStack(spacing: 0) {
+                    LinearGradient(colors: [.clear, .black], startPoint: .leading, endPoint: .trailing).frame(width: 14)
+                    Color.black
+                    LinearGradient(colors: [.black, .clear], startPoint: .leading, endPoint: .trailing).frame(width: 14)
+                }
+            }
             .onAppear { reveal(in: proxy, animated: false) }
             .onChange(of: current) { reveal(in: proxy, animated: true) }
         }
